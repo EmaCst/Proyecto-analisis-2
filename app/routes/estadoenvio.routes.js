@@ -1,5 +1,5 @@
 module.exports = (app) => {
-  const estadoEnvio = require("../controllers/estadoEnvio.controller.js");
+  const estadoEnvio = require("../controllers/estadoenvio.controller.js");
   const router = require("express").Router();
 
   // Crear un nuevo estado
