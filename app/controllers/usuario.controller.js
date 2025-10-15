@@ -1,7 +1,6 @@
 // controllers/usuario.controller.js
 const db = require("../models");
 const Usuario = db.usuarios;
-const Rol = db.roles;
 const Carrito = db.carritos;
 const Wishlist = db.wishlists;
 const bcrypt = require("bcryptjs");
@@ -10,10 +9,10 @@ const bcrypt = require("bcryptjs");
 exports.create = async (req, res) => {
   console.log(req.body);
   try {
-    const { nombre, email, contrasena, rolId, direccion, telefono } = req.body;
+    const { nombre, email, contrasena, Rol, direccion, telefono } = req.body;
 
     // Validación de campos obligatorios
-    if (!nombre || !email || !contrasena || !rolId) {
+    if (!nombre || !email || !contrasena || !Rol) {
       return res.status(400).json({ message: "Faltan datos obligatorios." });
     }
 
@@ -21,12 +20,6 @@ exports.create = async (req, res) => {
     const usuarioExistente = await Usuario.findOne({ where: { email } });
     if (usuarioExistente) {
       return res.status(400).json({ message: "El email ya está registrado." });
-    }
-
-    // Revisar si el rol existe
-    const rol = await Rol.findByPk(rolId);
-    if (!rol) {
-      return res.status(400).json({ message: "El rol no existe." });
     }
 
     // Hash de la contraseña
@@ -37,7 +30,7 @@ exports.create = async (req, res) => {
       nombre,
       email,
       contrasena: hash,
-      rolId,
+      Rol,
       direccion: direccion || null,
       telefono: telefono || null
     });

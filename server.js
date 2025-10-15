@@ -35,8 +35,6 @@ app.get("/", (req, res) => {
 
 // Importamos rutas de facturas con controller que acepta tarjetas crudas
 require("./app/routes/factura.routes.js")(app);
-
-require("./app/routes/rol.routes")(app);
 require("./app/routes/inventario.routes")(app);
 require("./app/routes/promocion.routes")(app);
 require("./app/routes/productopromocion.routes")(app);

@@ -36,7 +36,6 @@ db.sequelize = sequelize;
 
 
 // ================== IMPORTACIÓN DE MODELOS ==================
-db.roles = require("./Rol.model.js")(sequelize, DataTypes);
 db.usuarios = require("./usuario.model.js")(sequelize, DataTypes);
 db.sucursales = require("./sucursal.model.js")(sequelize, DataTypes);
 db.productos = require("./producto.model.js")(sequelize, DataTypes);
@@ -55,10 +54,6 @@ db.wishlists = require("./Wishlist.model.js")(sequelize, DataTypes);
 db.wishlistDetalles = require("./wishlistdetalle.model.js")(sequelize, DataTypes);
 
 // ================= RELACIONES =================
-
-// Roles y Usuarios
-db.roles.hasMany(db.usuarios, { foreignKey: "rolId" });
-db.usuarios.belongsTo(db.roles, { foreignKey: "rolId" });
 
 // Productos, Colores, Tallas, Sucursales, Inventario
 db.productos.hasMany(db.inventarios, { foreignKey: "productoId" });

@@ -24,7 +24,11 @@ module.exports = (sequelize, DataTypes) => {
     telefono: {
       type: DataTypes.STRING(20),
     },
-  });
+        Rol: {
+      type: DataTypes.STRING(20),
+      allowNull: false
+  }
+});
 
   return Usuario;
 };
