@@ -1,17 +1,15 @@
-// controllers/usuario.controller.js
 const db = require("../models");
 const Usuario = db.usuarios;
 const Carrito = db.carritos;
 const Wishlist = db.wishlists;
 const bcrypt = require("bcryptjs");
 
-// Crear usuario
+// 📌 Crear usuario
 exports.create = async (req, res) => {
-  console.log(req.body);
   try {
     const { nombre, email, contrasena, Rol, direccion, telefono } = req.body;
 
-    // Validación de campos obligatorios
+    // Validar campos requeridos
     if (!nombre || !email || !contrasena || !Rol) {
       return res.status(400).json({ message: "Faltan datos obligatorios." });
     }
@@ -22,7 +20,7 @@ exports.create = async (req, res) => {
       return res.status(400).json({ message: "El email ya está registrado." });
     }
 
-    // Hash de la contraseña
+    // Hashear contraseña
     const hash = await bcrypt.hash(contrasena, 10);
 
     // Crear usuario
@@ -32,31 +30,29 @@ exports.create = async (req, res) => {
       contrasena: hash,
       Rol,
       direccion: direccion || null,
-      telefono: telefono || null
+      telefono: telefono || null,
     });
 
-// Crear carrito y wishlist ligados al usuario
-const carrito = await Carrito.create({ usuarioId: nuevoUsuario.id });
-const wishlist = await Wishlist.create({ usuarioId: nuevoUsuario.id });
+    // Crear carrito y wishlist para el usuario
+    await Carrito.create({ usuarioId: nuevoUsuario.id });
+    await Wishlist.create({ usuarioId: nuevoUsuario.id });
 
-
-    return res.status(201).json({ 
+    return res.status(201).json({
       message: "Usuario creado correctamente.",
       usuario: {
         id: nuevoUsuario.id,
         nombre: nuevoUsuario.nombre,
         email: nuevoUsuario.email,
-        rolId: nuevoUsuario.rolId
-      }
+        Rol: nuevoUsuario.Rol,
+      },
     });
   } catch (error) {
-    console.error(error);
+    console.error("❌ Error en create:", error);
     return res.status(500).json({ message: "Error al crear usuario." });
   }
 };
 
-
-// Login de usuario
+// 📌 Login de usuario
 exports.login = async (req, res) => {
   try {
     const { email, contrasena } = req.body;
@@ -65,20 +61,30 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Faltan datos obligatorios." });
     }
 
+    // Buscar usuario por email
     const usuario = await Usuario.findOne({ where: { email } });
     if (!usuario) {
       return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
+    // Comparar contraseñas (texto plano vs hash)
     const esValido = await bcrypt.compare(contrasena, usuario.contrasena);
     if (!esValido) {
       return res.status(401).json({ message: "Contraseña incorrecta." });
     }
 
-    // Aquí podrías generar un token JWT si quieres
-    return res.status(200).json({ message: "Login exitoso." });
+    // ✅ Login exitoso → devolvemos datos del usuario (sin contraseña)
+    return res.status(200).json({
+      message: "Login exitoso.",
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        Rol: usuario.Rol, // 👈 muy importante
+      },
+    });
   } catch (error) {
-    console.error(error);
+    console.error("❌ Error en login:", error);
     return res.status(500).json({ message: "Error en login." });
   }
 };
