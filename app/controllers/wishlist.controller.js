@@ -1,103 +1,42 @@
 const db = require("../models");
-const Wishlist = db.wishlists;
 
-
-// 🔹 Obtener todos los productos de la wishlist (por wishlistId)
-exports.obtenerDetallesPorWishlist = async (req, res) => {
+// Crear wishlist
+exports.create = async (req, res) => {
   try {
-    const { wishlistId } = req.params;
-
-    const detalles = await db.wishlistDetalles.findAll({
-      where: { wishlistId },
-      include: [
-        {
-          model: db.inventarios,
-          include: [
-            { model: db.productos, attributes: ["nombre"] },
-            { model: db.tallas, attributes: ["talla"] },
-            { model: db.colores, attributes: ["color"] },
-          ],
-          attributes: ["precio"],
-        },
-      ],
-    });
-
-    if (!detalles.length) {
-      return res.status(404).json({ mensaje: "No hay productos en esta wishlist" });
-    }
-
-    const resultado = detalles.map(detalle => {
-      const inv = detalle.inventario;
-      return {
-        id: detalle.id,
-        producto: inv.producto.nombre,
-        talla: inv.talla.talla,
-        color: inv.color.color,
-        precio: inv.precio,
-        cantidad: detalle.cantidad ?? 1,
-        subtotal: inv.precio * (detalle.cantidad ?? 1),
-      };
-    });
-
-    res.json(resultado);
+    const { usuarioId } = req.body;
+    const wishlist = await db.wishlists.create({ usuarioId });
+    res.status(201).json(wishlist);
   } catch (error) {
-    console.error("Error al obtener los detalles de wishlist:", error);
-    res.status(500).json({ mensaje: "Error del servidor" });
+    console.error("Error al crear wishlist:", error);
+    res.status(500).json({ mensaje: "Error al crear wishlist" });
   }
 };
 
-// 🔹 Agregar producto a wishlist
-exports.agregarAWishlist = async (req, res) => {
+// Obtener wishlist de un usuario
+exports.findByUsuario = async (req, res) => {
   try {
-    const { wishlistId, inventarioId, cantidad } = req.body;
-
-    const detalle = await db.wishlistDetalles.create({
-      wishlistId,
-      inventarioId,
-      cantidad: cantidad ?? 1
+    const { usuarioId } = req.params;
+    const wishlist = await db.wishlists.findOne({
+      where: { usuarioId },
     });
+    if (!wishlist)
+      return res.status(404).json({ mensaje: "Wishlist no encontrada" });
 
-    res.status(201).json(detalle);
+    res.json(wishlist);
   } catch (error) {
-    console.error("Error al agregar producto a wishlist:", error);
-    res.status(500).json({ mensaje: "Error del servidor" });
+    console.error("Error al obtener wishlist:", error);
+    res.status(500).json({ mensaje: "Error al obtener wishlist" });
   }
 };
 
-// 🔹 Eliminar producto de la wishlist
-exports.eliminarDetalle = async (req, res) => {
+// Vaciar wishlist
+exports.clear = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const eliminado = await db.wishlistDetalles.destroy({ where: { id } });
-    if (!eliminado) return res.status(404).json({ mensaje: "Detalle no encontrado" });
-
-    res.json({ mensaje: "Producto eliminado de la wishlist" });
+    await db.wishlistDetalles.destroy({ where: { wishlistId: id } });
+    res.json({ mensaje: "Wishlist vaciada" });
   } catch (error) {
-    console.error("Error al eliminar detalle de wishlist:", error);
-    res.status(500).json({ mensaje: "Error del servidor" });
-  }
-};
-
-// 🔹 Pasar un producto de la wishlist al carrito
-exports.moverAlCarrito = async (req, res) => {
-  try {
-    const { detalleId, carritoId, cantidad } = req.body;
-
-    const detalle = await db.wishlistDetalles.findByPk(detalleId);
-    if (!detalle) return res.status(404).json({ mensaje: "Detalle no encontrado" });
-
-    await db.carritoDetalles.create({
-      carritoId,
-      inventarioId: detalle.inventarioId,
-      cantidad: cantidad ?? 1,
-    });
-
-    await detalle.destroy();
-
-    res.json({ mensaje: "Producto movido al carrito" });
-  } catch (error) {
-    console.error("Error al mover producto al carrito:", error);
-    res.status(500).json({ mensaje: "Error del servidor" });
+    console.error("Error al vaciar wishlist:", error);
+    res.status(500).json({ mensaje: "Error al vaciar wishlist" });
   }
 };
