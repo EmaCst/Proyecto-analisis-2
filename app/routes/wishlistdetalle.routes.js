@@ -15,3 +15,5 @@ router.post("/moverAlCarrito", wishlistDetalle.moverAlCarrito);
 router.delete("/:id", wishlistDetalle.eliminarDetalle);
 
 module.exports = router;
+
+console.log("✅ Cargó wishlistdetalle.routes.js");

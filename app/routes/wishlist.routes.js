@@ -8,3 +8,4 @@ router.get("/usuario/:usuarioId", wishlistController.findByUsuario);
 router.delete("/clear/:id", wishlistController.clear);
 
 module.exports = router;
+console.log("✅ Cargó wishlist.routes.js");

@@ -121,5 +121,8 @@ db.facturaDetalles.belongsTo(db.facturaEncabezados, { foreignKey: "facturaId" })
 db.inventarios.hasMany(db.facturaDetalles, { foreignKey: "inventarioId" });
 db.facturaDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
 
+// ================== Relaciones explícitas en la tabla intermedia ==================
+db.productoPromociones.belongsTo(db.productos, { foreignKey: "productoId", as: "producto" });
+db.productoPromociones.belongsTo(db.promociones, { foreignKey: "promocionId", as: "promocion" });
 
 module.exports = db;
