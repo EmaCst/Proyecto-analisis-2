@@ -65,6 +65,8 @@ exports.create = async (req, res) => {
     // -----------------------
     // Crear PaymentIntent usando Stripe
     // -----------------------
+    console.log("paymentMethodId recibido:", paymentMethodId, "Total:", total);
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(total * 100), // en centavos
       currency: "gtq",
