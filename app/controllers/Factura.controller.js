@@ -2,7 +2,7 @@
 const db = require("../models");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-// Modelos (ajusta si difieren)
+// Modelos
 const Factura = db.facturaEncabezados;
 const FacturaDetalle = db.facturaDetalles;
 const Usuario = db.usuarios;
@@ -18,23 +18,21 @@ exports.create = async (req, res) => {
     direccionEnvio,
     detalles, // [{ inventarioId, cantidad }]
     promocionId,
-    // Ahora esperamos un objeto `card` con los datos crudos:
-    // card: { number, exp_month, exp_year, cvc }
-    card
+    paymentMethodId, // ahora esperamos el PaymentMethodId
+    total: totalFrontend, // opcional: total enviado desde el frontend
   } = req.body;
 
-  // Validaciones básicas
   if (!Array.isArray(detalles) || detalles.length === 0) {
     return res.status(400).json({ message: "Detalles inválidos" });
   }
-  if (!card || !card.number || !card.exp_month || !card.exp_year || !card.cvc) {
-    return res.status(400).json({ message: "Faltan datos de la tarjeta (card)" });
+  if (!paymentMethodId) {
+    return res.status(400).json({ message: "Falta paymentMethodId" });
   }
 
   const t = await db.sequelize.transaction();
 
   try {
-    // Calcular subtotal (asegurando parseInt para evitar NaN)
+    // Calcular subtotal
     let subtotal = 0;
     for (const item of detalles) {
       const invId = parseInt(item.inventarioId, 10);
@@ -63,28 +61,17 @@ exports.create = async (req, res) => {
     const total = subtotalConDescuento + iva;
 
     // -----------------------
-    // Crear PaymentIntent usando los datos crudos de la tarjeta (raw card)
+    // Crear PaymentIntent usando PaymentMethodId
     // -----------------------
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(total * 100), // en centavos
       currency: "usd",
-      description: "Pago de factura Tienda Online",
-      payment_method_data: {
-        type: "card",
-        card: {
-          number: String(card.number).replace(/\s+/g, ""), // limpiar espacios
-          exp_month: parseInt(card.exp_month, 10),
-          exp_year: parseInt(card.exp_year, 10),
-          cvc: String(card.cvc)
-        }
-      },
+      payment_method: paymentMethodId,
       confirm: true, // confirmar inmediatamente
-      // automatic_payment_methods: { enabled: true } // opcional
+      description: "Pago de factura Tienda Online",
     });
 
-    // Si Stripe devolviera un status distinto a succeeded, podrías manejarlo
     if (!paymentIntent || (paymentIntent.status !== 'succeeded' && paymentIntent.status !== 'requires_capture')) {
-      // permitimos 'requires_capture' si capturas más tarde; ajusta según flujo
       throw new Error(`Pago no completado. Estado Stripe: ${paymentIntent.status}`);
     }
 
@@ -118,7 +105,6 @@ exports.create = async (req, res) => {
       if (inventario.cantidad < qty)
         throw new Error(`Inventario insuficiente para ${inventario.producto.nombre}`);
 
-      // Crear detalle
       await FacturaDetalle.create(
         {
           facturaId: factura.id,
@@ -130,7 +116,6 @@ exports.create = async (req, res) => {
         { transaction: t }
       );
 
-      // Disminuir inventario
       inventario.cantidad -= qty;
       await inventario.save({ transaction: t });
     }
@@ -161,42 +146,19 @@ exports.create = async (req, res) => {
   } catch (error) {
     await t.rollback();
     console.error("ERROR /api/facturas ->", error);
-    // Devuelve mensaje claro al cliente (en test está bien mostrar error.message)
     res.status(500).json({ message: error.message || "Error al crear la factura" });
   }
 };
 
-// Obtener todas las facturas
+// Obtener todas las facturas (sin cambios)
 exports.findAll = async (req, res) => {
   try {
     const facturas = await Factura.findAll({
       include: [
-        {
-          model: Usuario,
-          attributes: ["nombre", "email"],
-        },
-        {
-          model: Promocion,
-          attributes: ["nombre", "descuento"],
-        },
-        {
-          model: Envio,
-          include: [
-            {
-              model: EstadoEnvio,
-              attributes: ["nombre"],
-            },
-          ],
-        },
-        {
-          model: FacturaDetalle,
-          include: [
-            {
-              model: Inventario,
-              include: [{ model: Producto, attributes: ["nombre", "precio"] }],
-            },
-          ],
-        },
+        { model: Usuario, attributes: ["nombre", "email"] },
+        { model: Promocion, attributes: ["nombre", "descuento"] },
+        { model: Envio, include: [{ model: EstadoEnvio, attributes: ["nombre"] }] },
+        { model: FacturaDetalle, include: [{ model: Inventario, include: [{ model: Producto, attributes: ["nombre", "precio"] }] }] },
       ],
     });
 
