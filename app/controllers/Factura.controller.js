@@ -63,15 +63,18 @@ exports.create = async (req, res) => {
     // -----------------------
     // Crear PaymentIntent usando PaymentMethodId
     // -----------------------
-console.log("PaymentMethodId recibido:", paymentMethodId);
-const paymentIntent = await stripe.paymentIntents.create({
-  amount: Math.round(parseFloat(total) * 100),
-  currency: "usd",
-  payment_method: paymentMethodId,
-  confirm: true,
+const paymentMethod = await stripe.createPaymentMethod({
+  type: "card",
+  card: {
+    number: formData.tarjeta,
+    exp_month,
+    exp_year,
+    cvc: formData.cvv,
+  },
+  billing_details: {
+    name: formData.nombre,
+  },
 });
-
-console.log("PaymentIntent creado:", paymentIntent);
 
 
     // -----------------------
