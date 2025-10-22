@@ -63,17 +63,16 @@ exports.create = async (req, res) => {
     // -----------------------
     // Crear PaymentIntent usando PaymentMethodId
     // -----------------------
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(total * 100), // en centavos
-      currency: "usd",
-      payment_method: paymentMethodId,
-      confirm: true, // confirmar inmediatamente
-      description: "Pago de factura Tienda Online",
-    });
+console.log("PaymentMethodId recibido:", paymentMethodId);
+const paymentIntent = await stripe.paymentIntents.create({
+  amount: Math.round(parseFloat(total) * 100),
+  currency: "usd",
+  payment_method: paymentMethodId,
+  confirm: true,
+});
 
-    if (!paymentIntent || (paymentIntent.status !== 'succeeded' && paymentIntent.status !== 'requires_capture')) {
-      throw new Error(`Pago no completado. Estado Stripe: ${paymentIntent.status}`);
-    }
+console.log("PaymentIntent creado:", paymentIntent);
+
 
     // -----------------------
     // Crear factura encabezado
