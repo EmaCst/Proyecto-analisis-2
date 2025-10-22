@@ -19,7 +19,6 @@ exports.create = async (req, res) => {
     detalles, // [{ inventarioId, cantidad }]
     promocionId,
     paymentMethodId, // ahora esperamos el PaymentMethodId
-    total: totalFrontend, // opcional: total enviado desde el frontend
   } = req.body;
 
   if (!Array.isArray(detalles) || detalles.length === 0) {
@@ -63,19 +62,16 @@ exports.create = async (req, res) => {
     // -----------------------
     // Crear PaymentIntent usando PaymentMethodId
     // -----------------------
-const paymentMethod = await stripe.createPaymentMethod({
-  type: "card",
-  card: {
-    number: formData.tarjeta,
-    exp_month,
-    exp_year,
-    cvc: formData.cvv,
-  },
-  billing_details: {
-    name: formData.nombre,
-  },
-});
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(total * 100), // Stripe usa centavos
+      currency: "gtq",
+      payment_method: paymentMethodId,
+      confirm: true, // confirma el pago inmediatamente
+    });
 
+    if (paymentIntent.status !== "succeeded") {
+      throw new Error("El pago no se completó correctamente");
+    }
 
     // -----------------------
     // Crear factura encabezado
@@ -143,7 +139,7 @@ const paymentMethod = await stripe.createPaymentMethod({
       factura,
       envio,
       stripeStatus: paymentIntent.status,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     });
   } catch (error) {
     await t.rollback();
