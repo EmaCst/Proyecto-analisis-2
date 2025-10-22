@@ -18,7 +18,8 @@ exports.create = async (req, res) => {
     direccionEnvio,
     detalles, // [{ inventarioId, cantidad }]
     promocionId,
-    paymentMethodId, // ahora esperamos el PaymentMethodId
+    paymentMethodId, // enviado desde frontend
+    total: totalFrontend, // opcional
   } = req.body;
 
   if (!Array.isArray(detalles) || detalles.length === 0) {
@@ -31,7 +32,9 @@ exports.create = async (req, res) => {
   const t = await db.sequelize.transaction();
 
   try {
+    // -----------------------
     // Calcular subtotal
+    // -----------------------
     let subtotal = 0;
     for (const item of detalles) {
       const invId = parseInt(item.inventarioId, 10);
@@ -46,7 +49,7 @@ exports.create = async (req, res) => {
       subtotal += inventario.producto.precio * qty;
     }
 
-    // Aplicar promoción (si hay)
+    // Aplicar promoción
     let descuento = 0;
     if (promocionId) {
       const promo = await Promocion.findByPk(promocionId);
@@ -60,13 +63,13 @@ exports.create = async (req, res) => {
     const total = subtotalConDescuento + iva;
 
     // -----------------------
-    // Crear PaymentIntent usando PaymentMethodId
+    // Crear PaymentIntent usando Stripe
     // -----------------------
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(total * 100), // Stripe usa centavos
+      amount: Math.round(total * 100), // en centavos
       currency: "gtq",
       payment_method: paymentMethodId,
-      confirm: true, // confirma el pago inmediatamente
+      confirm: true, // confirmar inmediatamente
     });
 
     if (paymentIntent.status !== "succeeded") {
@@ -125,7 +128,7 @@ exports.create = async (req, res) => {
       {
         facturaId: factura.id,
         direccionEnvio,
-        estadoId: 1, // "Pendiente"
+        estadoId: 1, // Pendiente
         fechaCreacion: new Date(),
         fechaActualizacion: new Date(),
       },
@@ -148,7 +151,7 @@ exports.create = async (req, res) => {
   }
 };
 
-// Obtener todas las facturas (sin cambios)
+// Obtener todas las facturas
 exports.findAll = async (req, res) => {
   try {
     const facturas = await Factura.findAll({
@@ -156,7 +159,12 @@ exports.findAll = async (req, res) => {
         { model: Usuario, attributes: ["nombre", "email"] },
         { model: Promocion, attributes: ["nombre", "descuento"] },
         { model: Envio, include: [{ model: EstadoEnvio, attributes: ["nombre"] }] },
-        { model: FacturaDetalle, include: [{ model: Inventario, include: [{ model: Producto, attributes: ["nombre", "precio"] }] }] },
+        {
+          model: FacturaDetalle,
+          include: [
+            { model: Inventario, include: [{ model: Producto, attributes: ["nombre", "precio"] }] },
+          ],
+        },
       ],
     });
 
