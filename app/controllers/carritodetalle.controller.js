@@ -7,9 +7,16 @@ exports.create = async (req, res) => {
   try {
     const { carritoId, inventarioId, cantidad } = req.body;
 
-    if (!carritoId || !inventarioId || !cantidad) {
-      return res.status(400).json({ mensaje: "Faltan datos obligatorios" });
-    }
+    if (!carritoId) {
+  return res.status(400).json({ mensaje: "Falta el campo 'carritoId'" });
+}
+if (!inventarioId) {
+  return res.status(400).json({ mensaje: "Falta el campo 'inventarioId'" });
+}
+if (!cantidad) {
+  return res.status(400).json({ mensaje: "Falta el campo 'cantidad'" });
+}
+
 
     // 🔹 Buscar el inventario asociado
     const inventario = await db.inventarios.findByPk(inventarioId);
