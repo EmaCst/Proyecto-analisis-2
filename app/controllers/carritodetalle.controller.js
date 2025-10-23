@@ -11,31 +11,57 @@ exports.create = async (req, res) => {
       return res.status(400).json({ mensaje: "Faltan datos obligatorios" });
     }
 
-    // Verificar si ya existe el detalle en el carrito
+    // 🔹 Buscar el inventario asociado
+    const inventario = await db.inventarios.findByPk(inventarioId);
+
+    if (!inventario) {
+      return res.status(404).json({ mensaje: "Inventario no encontrado" });
+    }
+
+    // 🔹 Validar que haya suficiente stock
+    if (inventario.cantidad < cantidad) {
+      return res.status(400).json({ mensaje: "Cantidad solicitada excede el stock disponible" });
+    }
+
+    // 🔹 Buscar si ya existe el detalle en el carrito
     const detalleExistente = await db.carritoDetalles.findOne({
       where: { carritoId, inventarioId },
     });
 
     if (detalleExistente) {
-      // Si existe, sumar la cantidad
-      detalleExistente.cantidad += cantidad;
+      // Si ya está en el carrito, sumar la cantidad
+      const nuevaCantidad = detalleExistente.cantidad + cantidad;
+
+      if (nuevaCantidad > inventario.cantidad) {
+        return res.status(400).json({ mensaje: "Stock insuficiente para agregar más unidades" });
+      }
+
+      detalleExistente.cantidad = nuevaCantidad;
       await detalleExistente.save();
-      return res.status(200).json(detalleExistente);
+
+      return res.status(200).json({
+        mensaje: "Cantidad actualizada en el carrito",
+        detalle: detalleExistente,
+      });
     }
 
-    // Crear un nuevo detalle si no existe
+    // 🔹 Crear un nuevo detalle si no existe
     const nuevoDetalle = await db.carritoDetalles.create({
       carritoId,
       inventarioId,
       cantidad,
     });
 
-    res.status(201).json(nuevoDetalle);
+    res.status(201).json({
+      mensaje: "Producto agregado al carrito",
+      detalle: nuevoDetalle,
+    });
   } catch (error) {
-    console.error(error);
+    console.error("Error al agregar al carrito:", error);
     res.status(500).json({ mensaje: "Error al agregar al carrito" });
   }
 };
+
 
 
 // =====================

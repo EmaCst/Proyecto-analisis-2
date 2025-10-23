@@ -11,4 +11,6 @@ router.get("/carrito/:carritoId", carritoDetalleController.obtenerDetallesPorCar
 // DELETE: eliminar un detalle por id
 router.delete("/:id", carritoDetalleController.eliminarDetalle);
 
+
+
 module.exports = router;
