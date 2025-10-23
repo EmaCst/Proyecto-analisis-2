@@ -1,6 +1,7 @@
+// routes/factura.routes.js
 const express = require("express");
 const router = express.Router();
-const facturaController = require("../controllers/Factura.controller");
+const facturaController = require("../controllers/factura.controller"); // 👈 corregido (minúscula)
 
 // Crear una factura (con Stripe y Envío)
 router.post("/", facturaController.create);
@@ -11,3 +12,4 @@ router.get("/", facturaController.findAll);
 module.exports = (app) => {
   app.use("/api/facturas", router);
 };
+
