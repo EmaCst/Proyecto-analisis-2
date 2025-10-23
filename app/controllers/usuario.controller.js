@@ -73,14 +73,24 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: "Contraseña incorrecta." });
     }
 
-    // ✅ Login exitoso → devolvemos datos del usuario (sin contraseña)
+    // Buscar carrito del usuario
+    const carrito = await Carrito.findOne({ where: { usuarioId: usuario.id } });
+    if (!carrito) {
+      return res.status(404).json({ message: "No se encontró el carrito del usuario." });
+    }
+
+    // ✅ Login exitoso → devolvemos datos del usuario y su carrito (sin contraseña)
     return res.status(200).json({
       message: "Login exitoso.",
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
         email: usuario.email,
-        Rol: usuario.Rol, // 👈 muy importante
+        Rol: usuario.Rol,
+      },
+      carrito: {
+        id: carrito.id,
+        usuarioId: carrito.usuarioId,
       },
     });
   } catch (error) {
