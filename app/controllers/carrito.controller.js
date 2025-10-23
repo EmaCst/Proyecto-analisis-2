@@ -12,15 +12,49 @@ exports.create = async (req, res) => {
   }
 };
 
-// Obtener carrito de un usuario
+// Obtener carrito de un usuario junto con sus detalles
 exports.findByUsuario = async (req, res) => {
   try {
     const { usuarioId } = req.params;
+
     const carrito = await db.carritos.findOne({
-      where: { usuarioId }
+      where: { usuarioId },
+      include: [
+        {
+          model: db.carritoDetalles,
+          as: "carritoDetalles",
+          include: [
+            {
+              model: db.inventarios,
+              as: "inventario",
+              include: [
+                { model: db.productos, attributes: ["nombre"] },
+                { model: db.tallas, attributes: ["talla"] },
+                { model: db.colores, attributes: ["color"] },
+              ],
+              attributes: ["precio"],
+            },
+          ],
+        },
+      ],
     });
+
     if (!carrito) return res.status(404).json({ mensaje: "Carrito no encontrado" });
-    res.json(carrito);
+
+    const detalles = carrito.carritoDetalles.map((d) => {
+      const inv = d.inventario;
+      return {
+        id: d.id,
+        producto: inv.producto.nombre,
+        talla: inv.talla.talla,
+        color: inv.color.color,
+        precio: inv.precio,
+        cantidad: d.cantidad,
+        subtotal: inv.precio * d.cantidad,
+      };
+    });
+
+    res.json({ carritoId: carrito.id, usuarioId: carrito.usuarioId, detalles });
   } catch (error) {
     console.error(error);
     res.status(500).json({ mensaje: "Error al obtener carrito" });
