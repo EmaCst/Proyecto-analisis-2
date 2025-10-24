@@ -11,18 +11,18 @@ const Carrito = db.carritos;
 const DetalleCarrito = db.detalleCarritos;
 
 exports.create = async (req, res) => {
-  const { usuarioId, direccionEnvio, paymentMethodId } = req.body;
+  const { usuarioId, carritoId, direccionEnvio, paymentMethodId } = req.body;
 
   if (!usuarioId) return res.status(400).json({ message: "Falta usuarioId" });
+  if (!carritoId) return res.status(400).json({ message: "Falta carritoId" });
   if (!paymentMethodId)
     return res.status(400).json({ message: "Falta paymentMethodId" });
 
   const t = await db.sequelize.transaction();
 
   try {
-    // Obtener el carrito del usuario
-    const carrito = await Carrito.findOne({
-      where: { usuarioId },
+    // Buscar el carrito por su ID
+    const carrito = await Carrito.findByPk(carritoId, {
       include: [
         {
           model: DetalleCarrito,
@@ -42,7 +42,9 @@ exports.create = async (req, res) => {
     for (const detalle of carrito.detalleCarritos) {
       const inventario = detalle.inventario;
       if (!inventario)
-        throw new Error(`Inventario no encontrado para un producto del carrito.`);
+        throw new Error(
+          `Inventario no encontrado para un producto del carrito.`
+        );
       if (inventario.cantidad < detalle.cantidad)
         throw new Error(
           `Inventario insuficiente para ${inventario.producto.nombre}`
@@ -114,7 +116,10 @@ exports.create = async (req, res) => {
     }
 
     // Vaciar carrito tras pagar
-    await DetalleCarrito.destroy({ where: { carritoId: carrito.id }, transaction: t });
+    await DetalleCarrito.destroy({
+      where: { carritoId: carrito.id },
+      transaction: t,
+    });
 
     await t.commit();
 
@@ -128,7 +133,9 @@ exports.create = async (req, res) => {
   } catch (error) {
     await t.rollback();
     console.error("ERROR /api/facturas ->", error);
-    res.status(500).json({ message: error.message || "Error al crear la factura" });
+    res
+      .status(500)
+      .json({ message: error.message || "Error al crear la factura" });
   }
 };
 
@@ -140,7 +147,10 @@ exports.findAll = async (req, res) => {
         {
           model: FacturaDetalle,
           include: [
-            { model: Inventario, include: [{ model: Producto, attributes: ["nombre", "precio"] }] },
+            {
+              model: Inventario,
+              include: [{ model: Producto, attributes: ["nombre", "precio"] }],
+            },
           ],
         },
         { model: Envio },
@@ -153,4 +163,3 @@ exports.findAll = async (req, res) => {
     res.status(500).json({ message: "Error al obtener las facturas" });
   }
 };
-
