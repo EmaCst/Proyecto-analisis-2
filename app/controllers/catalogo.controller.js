@@ -5,7 +5,7 @@ const Inventario = db.inventarios;
 const Color = db.colores;
 const Talla = db.tallas;
 
-// ✅ Obtener todo el catálogo (productos + colores + tallas + cantidad)
+// ✅ Obtener todo el catálogo (productos + colores + tallas + cantidad + inventarioId)
 exports.getAll = async (req, res) => {
   try {
     const catalogo = await Producto.findAll({
@@ -17,7 +17,7 @@ exports.getAll = async (req, res) => {
             { model: Color, as: "color", attributes: ["nombre"] },
             { model: Talla, as: "talla", attributes: ["numero"] }
           ],
-          attributes: ["cantidad"]
+          attributes: ["id", "cantidad"] // ✅ incluimos el id del inventario
         }
       ]
     });
@@ -52,7 +52,7 @@ exports.getById = async (req, res) => {
             },
             { model: Talla, as: "talla", attributes: ["numero"] }
           ],
-          attributes: ["cantidad"]
+          attributes: ["id", "cantidad"] // ✅ incluimos el id del inventario
         }
       ]
     });
