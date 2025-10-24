@@ -5,13 +5,13 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const Factura = db.facturaEncabezados;
 const FacturaDetalle = db.facturaDetalles;
 const Envio = db.envios;
+const Carrito = db.carritos;
+const CarritoDetalle = db.carritoDetalles;
 const Inventario = db.inventarios;
 const Producto = db.productos;
-const CarritoDetalle = db.carritoDetalles;
-const Carrito = db.carritos;
 
 exports.create = async (req, res) => {
-  const { usuarioId, carritoId, direccionEnvio, paymentMethodId, promocionId } = req.body;
+  const { usuarioId, carritoId, direccionEnvio, paymentMethodId } = req.body;
 
   if (!usuarioId) return res.status(400).json({ message: "Falta usuarioId" });
   if (!carritoId) return res.status(400).json({ message: "Falta carritoId" });
@@ -20,56 +20,69 @@ exports.create = async (req, res) => {
   const t = await db.sequelize.transaction();
 
   try {
-    // 🔹 Traer los detalles del carrito desde la BD
+    // 🔹 Obtener detalles del carrito
     const carrito = await Carrito.findByPk(carritoId, {
       include: [
         {
           model: CarritoDetalle,
-          include: [
-            {
-              model: Inventario,
-              include: [{ model: Producto }]
-            }
-          ]
-        }
+          include: [{ model: Inventario, include: [Producto] }],
+        },
       ],
-      transaction: t
     });
 
-    if (!carrito) throw new Error("No se encontró el carrito para procesar el pago");
+    if (!carrito) {
+      await t.rollback();
+      return res.status(400).json({ message: "⚠ No se encontró el carrito para procesar el pago." });
+    }
 
-    const detalles = carrito.carritoDetalles.map((item) => {
-      if (!item.inventario) throw new Error("Inventario del carrito no encontrado");
-      return {
-        inventarioId: item.inventario.id,
+    if (!carrito.carritoDetalles || carrito.carritoDetalles.length === 0) {
+      await t.rollback();
+      return res.status(400).json({ message: "⚠ El carrito está vacío." });
+    }
+
+    let subtotal = 0;
+    const detalles = [];
+
+    // 🔹 Validar stock y preparar detalles
+    for (const item of carrito.carritoDetalles) {
+      const inventario = item.inventario;
+      if (!inventario) throw new Error(`Inventario ${item.inventarioId} no encontrado`);
+      if (inventario.cantidad < item.cantidad)
+        throw new Error(`Inventario insuficiente para ${inventario.producto.nombre}`);
+
+      const itemSubtotal = inventario.producto.precio * item.cantidad;
+      subtotal += itemSubtotal;
+
+      detalles.push({
+        inventarioId: inventario.id,
         cantidad: item.cantidad,
-        precioUnitario: item.inventario.producto.precio,
-        subtotal: item.cantidad * item.inventario.producto.precio,
-      };
-    });
+        precioUnitario: inventario.producto.precio,
+        subtotal: itemSubtotal,
+      });
+    }
 
-    let subtotal = detalles.reduce((acc, item) => acc + item.subtotal, 0);
     const iva = subtotal * 0.12;
     const total = subtotal + iva;
 
-    // Crear PaymentIntent con Stripe
+    // 🔹 Crear PaymentIntent con Stripe
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(total * 100),
       currency: "gtq",
       payment_method: paymentMethodId,
       confirm: true,
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
     });
 
     if (paymentIntent.status !== "succeeded")
       throw new Error("El pago no se completó correctamente");
 
-    // Crear Factura
+    // 🔹 Crear Factura
     const factura = await Factura.create(
-      { usuarioId, subtotal, iva, total, promocionId },
+      { usuarioId, fecha: new Date(), subtotal, iva, total },
       { transaction: t }
     );
 
-    // Crear detalles y actualizar inventario
+    // 🔹 Crear detalles y actualizar inventario
     for (const item of detalles) {
       await FacturaDetalle.create(
         {
@@ -82,12 +95,12 @@ exports.create = async (req, res) => {
         { transaction: t }
       );
 
-      const inventario = await Inventario.findByPk(item.inventarioId, { transaction: t });
+      const inventario = await Inventario.findByPk(item.inventarioId);
       inventario.cantidad -= item.cantidad;
       await inventario.save({ transaction: t });
     }
 
-    // Crear envío si hay dirección
+    // 🔹 Crear envío si hay dirección
     let envio = null;
     if (direccionEnvio) {
       envio = await Envio.create(
@@ -102,7 +115,7 @@ exports.create = async (req, res) => {
       );
     }
 
-    // Vaciar carrito
+    // 🔹 Vaciar carrito
     await CarritoDetalle.destroy({ where: { carritoId }, transaction: t });
 
     await t.commit();
@@ -128,7 +141,7 @@ exports.findAll = async (req, res) => {
       include: [
         {
           model: FacturaDetalle,
-          include: [{ model: Inventario, include: [{ model: Producto }] }],
+          include: [{ model: Inventario, include: [Producto] }],
         },
         { model: Envio },
       ],
@@ -140,4 +153,3 @@ exports.findAll = async (req, res) => {
     res.status(500).json({ message: "Error al obtener las facturas" });
   }
 };
-
