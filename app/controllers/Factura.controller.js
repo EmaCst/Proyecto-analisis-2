@@ -14,37 +14,33 @@ const Carrito = db.carritos;
 const CarritoDetalle = db.carritoDetalles;
 
 exports.create = async (req, res) => {
-  const { usuarioId, direccionEnvio, paymentMethodId } = req.body;
+  const { usuarioId, direccionEnvio, paymentMethodId, detalles } = req.body;
 
   if (!usuarioId) return res.status(400).json({ message: "Falta usuarioId" });
   if (!paymentMethodId) return res.status(400).json({ message: "Falta paymentMethodId" });
+  if (!detalles || detalles.length === 0)
+    return res.status(400).json({ message: "Falta la lista de detalles del carrito" });
 
   const t = await db.sequelize.transaction();
 
   try {
-    // -----------------------
-    // Obtener el carrito del usuario
-    // -----------------------
-    const carrito = await Carrito.findOne({
-      where: { usuarioId },
-      include: [
-        {
-          model: CarritoDetalle,
-          include: [{ model: Inventario, include: [{ model: Producto }] }],
-        },
-      ],
-    });
-
-    if (!carrito || carrito.carritoDetalles.length === 0) {
-      throw new Error("El carrito está vacío o no existe");
-    }
-
-    // -----------------------
-    // Calcular subtotal, IVA y total
-    // -----------------------
     let subtotal = 0;
-    for (const item of carrito.carritoDetalles) {
-      subtotal += item.inventario.producto.precio * item.cantidad;
+
+    // -----------------------
+    // Validar stock y calcular subtotal
+    // -----------------------
+    for (const item of detalles) {
+      const inventario = await Inventario.findByPk(item.inventario_id, {
+        include: [{ model: Producto }],
+      });
+
+      if (!inventario) throw new Error(`Inventario ${item.inventario_id} no encontrado`);
+      if (inventario.cantidad < item.cantidad)
+        throw new Error(`Inventario insuficiente para ${inventario.producto.nombre}`);
+
+      item.precioUnitario = inventario.producto.precio;
+      item.subtotal = inventario.producto.precio * item.cantidad;
+      subtotal += item.subtotal;
     }
 
     const iva = subtotal * 0.12;
@@ -70,39 +66,27 @@ exports.create = async (req, res) => {
     // Crear Factura
     // -----------------------
     const factura = await Factura.create(
-      {
-        usuarioId,
-        fecha: new Date(),
-        subtotal,
-        iva,
-        total,
-      },
+      { usuarioId, fecha: new Date(), subtotal, iva, total },
       { transaction: t }
     );
 
     // -----------------------
     // Crear Detalles y actualizar inventario
     // -----------------------
-    for (const item of carrito.carritoDetalles) {
-      const inventario = await Inventario.findByPk(item.inventarioId, {
-        include: [{ model: Producto }],
-      });
-
-      if (!inventario) throw new Error("Inventario no encontrado");
-      if (inventario.cantidad < item.cantidad)
-        throw new Error(`Inventario insuficiente para ${inventario.producto.nombre}`);
-
+    for (const item of detalles) {
       await FacturaDetalle.create(
         {
           facturaId: factura.id,
-          inventarioId: item.inventarioId,
+          inventarioId: item.inventario_id,
           cantidad: item.cantidad,
-          precioUnitario: inventario.producto.precio,
-          subtotal: inventario.producto.precio * item.cantidad,
+          precioUnitario: item.precioUnitario,
+          subtotal: item.subtotal,
         },
         { transaction: t }
       );
 
+      // Reducir stock
+      const inventario = await Inventario.findByPk(item.inventario_id);
       inventario.cantidad -= item.cantidad;
       await inventario.save({ transaction: t });
     }
@@ -124,11 +108,6 @@ exports.create = async (req, res) => {
       );
     }
 
-    // -----------------------
-    // Vaciar el carrito
-    // -----------------------
-    await CarritoDetalle.destroy({ where: { carritoId: carrito.id }, transaction: t });
-
     await t.commit();
 
     res.status(201).json({
@@ -144,6 +123,7 @@ exports.create = async (req, res) => {
     res.status(500).json({ message: error.message || "Error al crear la factura" });
   }
 };
+
 
 // Obtener todas las facturas
 exports.findAll = async (req, res) => {
