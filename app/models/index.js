@@ -125,4 +125,20 @@ db.facturaDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
 db.productoPromociones.belongsTo(db.productos, { foreignKey: "productoId", as: "producto" });
 db.productoPromociones.belongsTo(db.promociones, { foreignKey: "promocionId", as: "promocion" });
 
+// Usuario -> Carrito
+db.usuarios.hasOne(db.carritos, { foreignKey: "usuarioId" });
+db.carritos.belongsTo(db.usuarios, { foreignKey: "usuarioId" });
+
+// Carrito -> CarritoDetalle -> Inventario
+db.carritos.hasMany(db.carritoDetalles, { foreignKey: "carritoId" });
+db.carritoDetalles.belongsTo(db.carritos, { foreignKey: "carritoId" });
+
+db.inventarios.hasMany(db.carritoDetalles, { foreignKey: "inventarioId" });
+db.carritoDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
+
+// Inventario -> Producto
+db.productos.hasMany(db.inventarios, { foreignKey: "productoId" });
+db.inventarios.belongsTo(db.productos, { foreignKey: "productoId" });
+
+
 module.exports = db;
