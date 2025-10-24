@@ -53,17 +53,19 @@ db.envios = require("./envio.model.js")(sequelize, DataTypes);
 db.wishlists = require("./Wishlist.model.js")(sequelize, DataTypes);
 db.wishlistDetalles = require("./wishlistdetalle.model.js")(sequelize, DataTypes);
 
-// ================= RELACIONES =================
+// ================= MODELOS Y RELACIONES =================
 
 // Productos, Colores, Tallas, Sucursales, Inventario
 db.productos.hasMany(db.inventarios, { foreignKey: "productoId" });
-db.colores.hasMany(db.inventarios, { foreignKey: "colorId" });
-db.tallas.hasMany(db.inventarios, { foreignKey: "tallaId" });
-db.sucursales.hasMany(db.inventarios, { foreignKey: "sucursalId" });
-
 db.inventarios.belongsTo(db.productos, { foreignKey: "productoId" });
+
+db.colores.hasMany(db.inventarios, { foreignKey: "colorId" });
 db.inventarios.belongsTo(db.colores, { foreignKey: "colorId" });
+
+db.tallas.hasMany(db.inventarios, { foreignKey: "tallaId" });
 db.inventarios.belongsTo(db.tallas, { foreignKey: "tallaId" });
+
+db.sucursales.hasMany(db.inventarios, { foreignKey: "sucursalId" });
 db.inventarios.belongsTo(db.sucursales, { foreignKey: "sucursalId" });
 
 // Promociones y Productos (Many-to-Many)
@@ -78,7 +80,7 @@ db.productos.belongsToMany(db.promociones, {
   otherKey: "promocionId",
 });
 
-// Carrito y Carrito Detalle
+// Usuario -> Carrito -> CarritoDetalle -> Inventario
 db.usuarios.hasOne(db.carritos, { foreignKey: "usuarioId" });
 db.carritos.belongsTo(db.usuarios, { foreignKey: "usuarioId" });
 
@@ -88,12 +90,24 @@ db.carritoDetalles.belongsTo(db.carritos, { foreignKey: "carritoId" });
 db.inventarios.hasMany(db.carritoDetalles, { foreignKey: "inventarioId" });
 db.carritoDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
 
-// Envíos
-db.estadoEnvios.hasMany(db.envios, { foreignKey: "estadoId" });
-db.envios.belongsTo(db.estadoEnvios, { foreignKey: "estadoId" });
+// FacturaEncabezado -> Usuario, Promocion, FacturaDetalle, Envio
+db.usuarios.hasMany(db.facturaEncabezados, { foreignKey: "usuarioId" });
+db.facturaEncabezados.belongsTo(db.usuarios, { foreignKey: "usuarioId" });
+
+db.promociones.hasMany(db.facturaEncabezados, { foreignKey: "promocionId" });
+db.facturaEncabezados.belongsTo(db.promociones, { foreignKey: "promocionId" });
+
+db.facturaEncabezados.hasMany(db.facturaDetalles, { foreignKey: "facturaId" });
+db.facturaDetalles.belongsTo(db.facturaEncabezados, { foreignKey: "facturaId" });
+
+db.inventarios.hasMany(db.facturaDetalles, { foreignKey: "inventarioId" });
+db.facturaDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
 
 db.facturaEncabezados.hasOne(db.envios, { foreignKey: "facturaId" });
 db.envios.belongsTo(db.facturaEncabezados, { foreignKey: "facturaId" });
+
+db.estadoEnvios.hasMany(db.envios, { foreignKey: "estadoId" });
+db.envios.belongsTo(db.estadoEnvios, { foreignKey: "estadoId" });
 
 // Wishlist
 db.usuarios.hasMany(db.wishlists, { foreignKey: "usuarioId" });
@@ -105,40 +119,8 @@ db.wishlistDetalles.belongsTo(db.wishlists, { foreignKey: "wishlistId" });
 db.inventarios.hasMany(db.wishlistDetalles, { foreignKey: "inventarioId" });
 db.wishlistDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
 
-// FacturaEncabezado -> Usuario
-db.usuarios.hasMany(db.facturaEncabezados, { foreignKey: "usuarioId" });
-db.facturaEncabezados.belongsTo(db.usuarios, { foreignKey: "usuarioId" });
-
-// FacturaEncabezado -> Promocion 
-db.promociones.hasMany(db.facturaEncabezados, { foreignKey: "promocionId" });
-db.facturaEncabezados.belongsTo(db.promociones, { foreignKey: "promocionId" });
-
-// FacturaEncabezado -> FacturaDetalle
-db.facturaEncabezados.hasMany(db.facturaDetalles, { foreignKey: "facturaId" });
-db.facturaDetalles.belongsTo(db.facturaEncabezados, { foreignKey: "facturaId" });
-
-// Inventario -> FacturaDetalle (para tener talla/color)
-db.inventarios.hasMany(db.facturaDetalles, { foreignKey: "inventarioId" });
-db.facturaDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
-
-// ================== Relaciones explícitas en la tabla intermedia ==================
+// Relaciones explícitas en tabla intermedia ProductoPromociones
 db.productoPromociones.belongsTo(db.productos, { foreignKey: "productoId", as: "producto" });
 db.productoPromociones.belongsTo(db.promociones, { foreignKey: "promocionId", as: "promocion" });
-
-// Usuario -> Carrito
-db.usuarios.hasOne(db.carritos, { foreignKey: "usuarioId" });
-db.carritos.belongsTo(db.usuarios, { foreignKey: "usuarioId" });
-
-// Carrito -> CarritoDetalle -> Inventario
-db.carritos.hasMany(db.carritoDetalles, { foreignKey: "carritoId" });
-db.carritoDetalles.belongsTo(db.carritos, { foreignKey: "carritoId" });
-
-db.inventarios.hasMany(db.carritoDetalles, { foreignKey: "inventarioId" });
-db.carritoDetalles.belongsTo(db.inventarios, { foreignKey: "inventarioId" });
-
-// Inventario -> Producto
-db.productos.hasMany(db.inventarios, { foreignKey: "productoId" });
-db.inventarios.belongsTo(db.productos, { foreignKey: "productoId" });
-
 
 module.exports = db;
