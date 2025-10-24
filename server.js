@@ -34,7 +34,7 @@ app.get("/", (req, res) => {
 // ==========================
 
 // Importamos rutas de facturas con controller que acepta tarjetas crudas
-require("./app/routes/factura.routes.js")(app);
+//require("./app/routes/factura.routes.js")(app);
 require("./app/routes/inventario.routes")(app);
 require("./app/routes/promocion.routes")(app);
 require("./app/routes/productopromocion.routes")(app);
@@ -55,7 +55,10 @@ const wishlistDetalleRoutes = require("./app/routes/wishlistdetalle.routes");
 const carritoRoutes = require("./app/routes/carrito.routes");
 const wishlistRoutes = require("./app/routes/wishlist.routes");
 const estadoEnvioRoutes = require("./app/routes/estadoenvio.routes");
+const facturaRoutes = require("./app/routes/factura.routes.js");
 
+
+app.use("/api/facturas", facturaRoutes);
 app.use("/api/estadoEnvios", estadoEnvioRoutes); 
 app.use("/api/wishlists", wishlistRoutes);
 app.use("/api/carrito", carritoRoutes);
