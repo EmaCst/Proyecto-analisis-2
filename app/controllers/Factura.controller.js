@@ -2,7 +2,6 @@
 const db = require("../models");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-// Modelos
 const Factura = db.facturaEncabezados;
 const FacturaDetalle = db.facturaDetalles;
 const Usuario = db.usuarios;
@@ -18,10 +17,9 @@ exports.create = async (req, res) => {
     direccionEnvio,
     detalles, // [{ inventarioId, cantidad }]
     promocionId,
-    paymentMethodId // <-- ahora esperas esto desde el frontend
+    paymentMethodId // <-- viene del frontend
   } = req.body;
 
-  // Validaciones básicas
   if (!Array.isArray(detalles) || detalles.length === 0) {
     return res.status(400).json({ message: "Detalles inválidos" });
   }
@@ -33,7 +31,9 @@ exports.create = async (req, res) => {
   const t = await db.sequelize.transaction();
 
   try {
+    // -----------------------
     // Calcular subtotal
+    // -----------------------
     let subtotal = 0;
     for (const item of detalles) {
       const invId = parseInt(item.inventarioId, 10);
@@ -51,7 +51,9 @@ exports.create = async (req, res) => {
       subtotal += inventario.producto.precio * qty;
     }
 
+    // -----------------------
     // Aplicar promoción
+    // -----------------------
     let descuento = 0;
     if (promocionId) {
       const promo = await Promocion.findByPk(promocionId);
@@ -65,23 +67,18 @@ exports.create = async (req, res) => {
     const total = subtotalConDescuento + iva;
 
     // -----------------------
-    // Crear PaymentIntent usando paymentMethodId
+    // Crear PaymentIntent
     // -----------------------
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(total * 100), // centavos
+      amount: Math.round(total * 100), // en centavos
       currency: "usd",
       description: "Pago de factura Tienda Online",
       payment_method: paymentMethodId,
-      confirm: true, // confirma el pago inmediatamente
+      confirm: false, // ⚠ NO confirmamos desde el backend
     });
 
-    if (paymentIntent.status !== "succeeded") {
-              throw new Error(`Pago no completado. Estado Stripe: ${paymentIntent.status}`);
-
-    }
-
     // -----------------------
-    // Crear factura encabezado
+    // Crear factura (pendiente)
     // -----------------------
     const factura = await Factura.create(
       {
@@ -96,7 +93,7 @@ exports.create = async (req, res) => {
     );
 
     // -----------------------
-    // Crear detalles y actualizar inventario
+    // Crear detalles
     // -----------------------
     for (const item of detalles) {
       const invId = parseInt(item.inventarioId, 10);
@@ -107,9 +104,9 @@ exports.create = async (req, res) => {
       });
 
       if (!inventario) throw new Error("Inventario no encontrado");
-      if (inventario.cantidad < qty)
-       throw new Error(`Inventario insuficiente para ${inventario.producto.nombre}`);
-
+      if (inventario.cantidad < qty) {
+        throw new Error('Inventario insuficiente para ${inventario.producto.nombre');
+      }
 
       await FacturaDetalle.create(
         {
@@ -121,13 +118,10 @@ exports.create = async (req, res) => {
         },
         { transaction: t }
       );
-
-      inventario.cantidad -= qty;
-      await inventario.save({ transaction: t });
     }
 
     // -----------------------
-    // Crear Envío
+    // Crear Envío (pendiente)
     // -----------------------
     const envio = await Envio.create(
       {
@@ -142,12 +136,13 @@ exports.create = async (req, res) => {
 
     await t.commit();
 
+    // ✅ Responder con client_secret para confirmar el pago en el frontend
     res.status(201).json({
-      message: "Factura creada y pagada con éxito",
+      message: "Factura creada. Confirmar pago en cliente.",
       factura,
       envio,
-      stripeStatus: paymentIntent.status,
-      paymentIntentId: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret,
+      stripePaymentIntentId: paymentIntent.id,
     });
   } catch (error) {
     await t.rollback();
