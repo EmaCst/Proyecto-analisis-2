@@ -1,9 +1,33 @@
-exports.create = async (req, res) => {
-  const { usuarioId, direccionEnvio, detalles, promocionId } = req.body;
+// controllers/factura.controller.js
+const db = require("../models");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-  // Validar que haya productos
+// Modelos
+const Factura = db.facturaEncabezados;
+const FacturaDetalle = db.facturaDetalles;
+const Usuario = db.usuarios;
+const Envio = db.envios;
+const EstadoEnvio = db.estadoEnvios;
+const Promocion = db.promociones;
+const Inventario = db.inventarios;
+const Producto = db.productos;
+
+exports.create = async (req, res) => {
+  const {
+    usuarioId,
+    direccionEnvio,
+    detalles, // [{ inventarioId, cantidad }]
+    promocionId,
+    paymentMethodId // <-- ahora esperas esto desde el frontend
+  } = req.body;
+
+  // Validaciones básicas
   if (!Array.isArray(detalles) || detalles.length === 0) {
-    return res.status(400).json({ message: "⚠ El carrito está vacío." });
+    return res.status(400).json({ message: "Detalles inválidos" });
+  }
+
+  if (!paymentMethodId) {
+    return res.status(400).json({ message: "Falta paymentMethodId" });
   }
 
   const t = await db.sequelize.transaction();
@@ -12,15 +36,22 @@ exports.create = async (req, res) => {
     // Calcular subtotal
     let subtotal = 0;
     for (const item of detalles) {
-      const inventario = await Inventario.findByPk(item.inventarioId, {
+      const invId = parseInt(item.inventarioId, 10);
+      const qty = parseInt(item.cantidad, 10);
+
+      if (Number.isNaN(invId) || Number.isNaN(qty)) {
+        throw new Error("InventarioId o cantidad inválidos");
+      }
+
+      const inventario = await Inventario.findByPk(invId, {
         include: [{ model: Producto }],
       });
       if (!inventario) throw new Error("Inventario no encontrado");
 
-      subtotal += inventario.producto.precio * item.cantidad;
+      subtotal += inventario.producto.precio * qty;
     }
 
-    // Aplicar promoción (si hay)
+    // Aplicar promoción
     let descuento = 0;
     if (promocionId) {
       const promo = await Promocion.findByPk(promocionId);
@@ -33,7 +64,25 @@ exports.create = async (req, res) => {
     const iva = subtotalConDescuento * 0.12;
     const total = subtotalConDescuento + iva;
 
-    // 🧾 Crear la factura encabezado
+    // -----------------------
+    // Crear PaymentIntent usando paymentMethodId
+    // -----------------------
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(total * 100), // centavos
+      currency: "usd",
+      description: "Pago de factura Tienda Online",
+      payment_method: paymentMethodId,
+      confirm: true, // confirma el pago inmediatamente
+    });
+
+    if (paymentIntent.status !== "succeeded") {
+              throw new Error(`Pago no completado. Estado Stripe: ${paymentIntent.status}`);
+
+    }
+
+    // -----------------------
+    // Crear factura encabezado
+    // -----------------------
     const factura = await Factura.create(
       {
         usuarioId,
@@ -46,40 +95,45 @@ exports.create = async (req, res) => {
       { transaction: t }
     );
 
-    // 🧮 Crear detalles y actualizar inventario
+    // -----------------------
+    // Crear detalles y actualizar inventario
+    // -----------------------
     for (const item of detalles) {
-      const inventario = await Inventario.findByPk(item.inventarioId, {
+      const invId = parseInt(item.inventarioId, 10);
+      const qty = parseInt(item.cantidad, 10);
+
+      const inventario = await Inventario.findByPk(invId, {
         include: [{ model: Producto }],
       });
 
       if (!inventario) throw new Error("Inventario no encontrado");
-      if (inventario.cantidad < item.cantidad)
-        throw new Error(`Inventario insuficiente para ${inventario.producto.nombre}`);
+      if (inventario.cantidad < qty)
+       throw new Error(`Inventario insuficiente para ${inventario.producto.nombre}`);
 
 
-      // Crear detalle
       await FacturaDetalle.create(
         {
           facturaId: factura.id,
-          inventarioId: item.inventarioId,
-          cantidad: item.cantidad,
+          inventarioId: invId,
+          cantidad: qty,
           precioUnitario: inventario.producto.precio,
-          subtotal: inventario.producto.precio * item.cantidad,
+          subtotal: inventario.producto.precio * qty,
         },
         { transaction: t }
       );
 
-      // Disminuir inventario
-      inventario.cantidad -= item.cantidad;
+      inventario.cantidad -= qty;
       await inventario.save({ transaction: t });
     }
 
-    // 🚚 Crear envío simulado
+    // -----------------------
+    // Crear Envío
+    // -----------------------
     const envio = await Envio.create(
       {
         facturaId: factura.id,
         direccionEnvio,
-        estadoId: 1, // "Pendiente"
+        estadoId: 1, // Pendiente
         fechaCreacion: new Date(),
         fechaActualizacion: new Date(),
       },
@@ -88,14 +142,16 @@ exports.create = async (req, res) => {
 
     await t.commit();
 
-    return res.status(201).json({
-      message: "Factura creada con éxito (pago simulado)",
+    res.status(201).json({
+      message: "Factura creada y pagada con éxito",
       factura,
       envio,
+      stripeStatus: paymentIntent.status,
+      paymentIntentId: paymentIntent.id,
     });
   } catch (error) {
     await t.rollback();
-    console.error("ERROR al crear factura:", error);
+    console.error("ERROR /api/facturas ->", error);
     res.status(500).json({ message: error.message || "Error al crear la factura" });
   }
 };
