@@ -5,5 +5,6 @@ const facturaController = require("../controllers/Factura.controller"); // minú
 
 router.post("/", facturaController.create);
 router.get("/", facturaController.findAll);
+ router.get("/usuario/:usuarioId", facturaController.findAllByUsuario)
 
 module.exports = router;
