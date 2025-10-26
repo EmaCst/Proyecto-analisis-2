@@ -100,7 +100,7 @@ exports.create = async (req, res) => {
   }
 };
 
-// Obtener todas las facturas
+// Obtener todas las facturas (incluye total)
 exports.findAll = async (req, res) => {
   try {
     const facturas = await Factura.findAll({
@@ -111,11 +111,48 @@ exports.findAll = async (req, res) => {
         },
         { model: Envio },
       ],
+      order: [["fecha", "DESC"]],
     });
+
+    if (!facturas || facturas.length === 0) {
+      return res.status(404).json({ message: "No hay facturas registradas" });
+    }
 
     res.status(200).json(facturas);
   } catch (error) {
     console.error("ERROR /api/facturas ->", error);
     res.status(500).json({ message: "Error al obtener las facturas" });
+  }
+};
+
+// Obtener todas las facturas por usuario (incluye total)
+exports.findAllByUsuario = async (req, res) => {
+  try {
+    const { usuarioId } = req.params;
+
+    const facturas = await Factura.findAll({
+      where: { usuarioId },
+      include: [
+        {
+          model: FacturaDetalle,
+          include: [{ model: Inventario, include: [Producto] }],
+        },
+        { model: Envio },
+      ],
+      order: [["fecha", "DESC"]],
+    });
+
+    if (!facturas || facturas.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "El usuario no tiene facturas registradas" });
+    }
+
+    res.status(200).json(facturas);
+  } catch (error) {
+    console.error("ERROR /api/facturas/usuario/:usuarioId ->", error);
+    res
+      .status(500)
+      .json({ message: "Error al obtener las facturas del usuario" });
   }
 };
