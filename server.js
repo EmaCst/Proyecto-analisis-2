@@ -1,32 +1,57 @@
 // Importamos módulos
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
 const app = express();
 
-// Configuración de CORS
-const corsOptions = {
-  origin: "*", // Permite cualquier origen para pruebas desde Postman/Thunder
-};
-app.use(cors(corsOptions));
+// ==========================
+// 🔹 CONFIGURACIÓN DE CORS
+// ==========================
+const allowedOrigins = [
+  "http://localhost:5173", // desarrollo local
+  "https://proyecto-analisis-2.onrender.com", // dominio backend
+];
 
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Permitir solicitudes sin origen (Postman, curl, etc.)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("No permitido por CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
+// 🔹 Manejar preflight OPTIONS automáticamente
+app.options(/.*/, cors());
+
+
+// ==========================
 // Middleware para parsear JSON y formularios
+// ==========================
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// ==========================
 // Conexión con la base de datos
+// ==========================
 const db = require("./app/models");
 db.sequelize.sync();
-// Si necesitas reiniciar las tablas, descomenta esto:
-// db.sequelize.sync({ force: true }).then(() => {
-//   console.log("Drop and re-sync db.");
-// });
 
-// Ruta base
+// ==========================
+// Rutas base y del proyecto
+// ==========================
 app.get("/", (req, res) => {
-  res.json({ message: "Bienvenido a nuestro Cine" });
+  res.json({ message: "Bienvenido a nuestra Tienda de Zapatos" });
 });
 
 // ==========================
@@ -73,9 +98,9 @@ app.use("/api/colores", colorRoutes);
 app.use("/api/sucursales", sucursalRoutes);
 
 // ==========================
-//   SERVIDOR
+// Servidor
 // ==========================
 const PORT = process.env.PORT || 8081;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}.`);
+  console.log(`✅ Server is running on port ${PORT}.`);
 });
