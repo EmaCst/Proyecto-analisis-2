@@ -11,7 +11,7 @@ const app = express();
 // ==========================
 const allowedOrigins = [
   "http://localhost:5173", // desarrollo local
-//  "https://proyecto-analisis-2.onrender.com", // dominio backend
+  "https://proyecto-analisis-2.onrender.com", // dominio backend
 ];
 
 app.use(
@@ -63,7 +63,6 @@ app.get("/", (req, res) => {
 require("./app/routes/inventario.routes")(app);
 require("./app/routes/promocion.routes")(app);
 require("./app/routes/productopromocion.routes")(app);
-require("./app/routes/estadoenvio.routes")(app);
 require("./app/routes/catalogo.routes")(app);
 
 
