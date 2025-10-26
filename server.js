@@ -56,8 +56,10 @@ const carritoRoutes = require("./app/routes/carrito.routes");
 const wishlistRoutes = require("./app/routes/wishlist.routes");
 const estadoEnvioRoutes = require("./app/routes/estadoenvio.routes");
 const facturaRoutes = require("./app/routes/factura.routes.js");
+const envioRoutes = require("./app/routes/envio.routes.js");
 
 
+app.use("/api/Envios", envioRoutes);
 app.use("/api/facturas", facturaRoutes);
 app.use("/api/estadoEnvios", estadoEnvioRoutes); 
 app.use("/api/wishlists", wishlistRoutes);
