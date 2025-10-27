@@ -64,7 +64,7 @@ exports.create = async (req, res) => {
 
     const subtotalConDescuento = subtotal - descuento;
     const iva = subtotalConDescuento * 0.12;
-    const total = subtotalConDescuento + iva;
+    const total = subtotalConDescuento;
 
 // -----------------------
 // Crear y confirmar PaymentIntent
