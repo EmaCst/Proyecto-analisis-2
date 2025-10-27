@@ -98,3 +98,38 @@ exports.login = async (req, res) => {
     return res.status(500).json({ message: "Error en login." });
   }
 };
+
+// 📌 Obtener todos los usuarios (sin contraseñas)
+exports.getAll = async (req, res) => {
+  try {
+    const usuarios = await Usuario.findAll({
+      attributes: { exclude: ["contrasena"] }, // 👈 excluye el campo contraseña
+    });
+
+    return res.status(200).json(usuarios);
+  } catch (error) {
+    console.error("❌ Error en getAll:", error);
+    return res.status(500).json({ message: "Error al obtener los usuarios." });
+  }
+};
+
+
+// 📌 Obtener un usuario por ID (sin contraseña)
+exports.getById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const usuario = await Usuario.findByPk(id, {
+      attributes: { exclude: ["contrasena"] },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    return res.status(200).json(usuario);
+  } catch (error) {
+    console.error("❌ Error en getById:", error);
+    return res.status(500).json({ message: "Error al obtener el usuario." });
+  }
+};
+
