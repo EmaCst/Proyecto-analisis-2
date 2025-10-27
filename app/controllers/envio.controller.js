@@ -64,7 +64,7 @@ exports.marcarEnTransito = async (req, res) => {
     if (!envio) return res.status(404).json({ mensaje: "Envío no encontrado" });
 
     await envio.update({
-      estadoId: 2, // En tránsito
+      estadoId: 3, // En tránsito
       fechaActualizacion: new Date(),
     });
 
@@ -83,7 +83,7 @@ exports.marcarEntregado = async (req, res) => {
     if (!envio) return res.status(404).json({ mensaje: "Envío no encontrado" });
 
     await envio.update({
-      estadoId: 3, // Entregado
+      estadoId: 4, // Entregado
       fechaActualizacion: new Date(),
     });
 
