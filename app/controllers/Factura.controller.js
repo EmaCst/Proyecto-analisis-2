@@ -71,11 +71,16 @@ exports.create = async (req, res) => {
 // -----------------------
 const paymentIntent = await stripe.paymentIntents.create({
   amount: Math.round(total * 100), // en centavos
-  currency: "gtq",
+  currency: "gtq", // o "usd" si usas dólares
   description: "Pago de factura Tienda Online",
   payment_method: paymentMethodId,
-  confirm: true, // ✅ Confirmamos de inmediato
+  confirm: true,
+  automatic_payment_methods: {
+    enabled: true,
+    allow_redirects: "never", // 🔥 evita redirecciones y el error del return_url
+  },
 });
+
 
     // ----------------------------
     // Crear factura (pendiente)
