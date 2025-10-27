@@ -1,20 +1,24 @@
 const db = require("../models");
 const Envio = db.envios;
-const Factura = db.facturas;
+const Factura = db.facturaEncabezados; // Modelo correcto
 const Usuario = db.usuarios;
 const EstadoEnvio = db.estadoEnvios;
 
-// 🟦 Obtener todos los envíos
+// Obtener todos los envíos
 exports.getAllEnvios = async (req, res) => {
   try {
     const envios = await Envio.findAll({
       include: [
-        { model: Factura, include: [Usuario] },
-        { model: EstadoEnvio },
+        {
+          model: Factura,
+          include: [Usuario],
+        },
+        {
+          model: EstadoEnvio,
+        },
       ],
       order: [["fechaCreacion", "DESC"]],
     });
-
     res.json(envios);
   } catch (error) {
     console.error("Error al obtener todos los envíos:", error);
@@ -22,24 +26,28 @@ exports.getAllEnvios = async (req, res) => {
   }
 };
 
-// 🟩 Obtener todos los envíos por usuario
+// Obtener envíos por usuario
 exports.getEnviosByUsuario = async (req, res) => {
   try {
     const { usuarioId } = req.params;
-
     const envios = await Envio.findAll({
       include: [
         {
           model: Factura,
           where: { usuarioId },
+          include: [Usuario],
         },
-        { model: EstadoEnvio },
+        {
+          model: EstadoEnvio,
+        },
       ],
       order: [["fechaCreacion", "DESC"]],
     });
 
     if (envios.length === 0)
-      return res.status(404).json({ mensaje: "El usuario no tiene envíos registrados" });
+      return res
+        .status(404)
+        .json({ mensaje: "El usuario no tiene envíos registrados" });
 
     res.json(envios);
   } catch (error) {
@@ -48,16 +56,15 @@ exports.getEnviosByUsuario = async (req, res) => {
   }
 };
 
-// 🟠 Cambiar estado a “En tránsito”
+// Cambiar estado a “En tránsito”
 exports.marcarEnTransito = async (req, res) => {
   try {
     const { id } = req.params;
-
     const envio = await Envio.findByPk(id);
     if (!envio) return res.status(404).json({ mensaje: "Envío no encontrado" });
 
     await envio.update({
-      estadoId: 2, // “En tránsito”
+      estadoId: 2, // En tránsito
       fechaActualizacion: new Date(),
     });
 
@@ -68,16 +75,15 @@ exports.marcarEnTransito = async (req, res) => {
   }
 };
 
-// 🟢 Cambiar estado a “Entregado”
+// Cambiar estado a “Entregado”
 exports.marcarEntregado = async (req, res) => {
   try {
     const { id } = req.params;
-
     const envio = await Envio.findByPk(id);
     if (!envio) return res.status(404).json({ mensaje: "Envío no encontrado" });
 
     await envio.update({
-      estadoId: 3, // “Entregado”
+      estadoId: 3, // Entregado
       fechaActualizacion: new Date(),
     });
 

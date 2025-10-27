@@ -1,17 +1,17 @@
 const express = require("express");
 const router = express.Router();
-const envioController = require("../controllers/envio.controller");
+const enviosController = require("../controllers/envio.controller.js");
 
 // Obtener todos los envíos
-router.get("/", envioController.getAllEnvios);
+router.get("/", enviosController.getAllEnvios);
 
-// Obtener todos los envíos de un usuario
-router.get("/usuario/:usuarioId", envioController.getEnviosByUsuario);
+// Obtener envíos por usuario
+router.get("/usuario/:usuarioId", enviosController.getEnviosByUsuario);
 
-// Cambiar estado a “En tránsito”
-router.put("/:id/transito", envioController.marcarEnTransito);
+// Cambiar estado a "En tránsito"
+router.put("/transito/:id", enviosController.marcarEnTransito);
 
-// Cambiar estado a “Entregado”
-router.put("/:id/entregado", envioController.marcarEntregado);
+// Cambiar estado a "Entregado"
+router.put("/entregado/:id", enviosController.marcarEntregado);
 
 module.exports = router;
