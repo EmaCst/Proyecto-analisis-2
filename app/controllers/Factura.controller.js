@@ -66,16 +66,16 @@ exports.create = async (req, res) => {
     const iva = subtotalConDescuento * 0.12;
     const total = subtotalConDescuento + iva;
 
-    // -----------------------
-    // Crear PaymentIntent
-    // -----------------------
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(total * 100), // en centavos
-      currency: "usd",
-      description: "Pago de factura Tienda Online",
-      payment_method: paymentMethodId,
-      confirm: false, // ⚠ NO confirmamos desde el backend
-    });
+// -----------------------
+// Crear y confirmar PaymentIntent
+// -----------------------
+const paymentIntent = await stripe.paymentIntents.create({
+  amount: Math.round(total * 100), // en centavos
+  currency: "gtq",
+  description: "Pago de factura Tienda Online",
+  payment_method: paymentMethodId,
+  confirm: true, // ✅ Confirmamos de inmediato
+});
 
     // -----------------------
     // Crear factura (pendiente)
