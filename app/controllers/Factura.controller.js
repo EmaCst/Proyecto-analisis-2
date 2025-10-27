@@ -77,9 +77,9 @@ const paymentIntent = await stripe.paymentIntents.create({
   confirm: true, // ✅ Confirmamos de inmediato
 });
 
-    // -----------------------
+    // ----------------------------
     // Crear factura (pendiente)
-    // -----------------------
+    // -----------------------------
     const factura = await Factura.create(
       {
         usuarioId,
