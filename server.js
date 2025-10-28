@@ -65,6 +65,7 @@ require("./app/routes/promocion.routes")(app);
 require("./app/routes/productopromocion.routes")(app);
 require("./app/routes/catalogo.routes")(app);
 require("./app/routes/estadoenvio.routes")(app);
+require("./app/routes/dashboard.routes.js")(app);
 
 
 // ==========================
