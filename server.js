@@ -11,7 +11,7 @@ const app = express();
 // ==========================
 const allowedOrigins = [
   "http://localhost:5173", // desarrollo local
-  "https://proyecto-analisis-2.onrender.com", // dominio backend
+  "https://proyecto-analisis-2.onrender.com", 
    "https://zona404shoes.vercel.app"
 ];
 
