@@ -84,6 +84,7 @@ const wishlistRoutes = require("./app/routes/wishlist.routes");
 //const estadoEnvioRoutes = require("./app/routes/estadoenvio.routes");
 const facturaRoutes = require("./app/routes/factura.routes.js");
 const envioRoutes = require("./app/routes/envio.routes.js");
+const ChatRoutes = require("./app/routes/chat.routes.js").default;
 
 
 app.use("/api/Envios", envioRoutes);
@@ -98,6 +99,7 @@ app.use("/api/productos", productoRoutes);
 app.use("/api/tallas", tallaRoutes);
 app.use("/api/colores", colorRoutes);
 app.use("/api/sucursales", sucursalRoutes);
+app.use("/api/Chat", ChatRoutes);
 
 // ==========================
 // Servidor

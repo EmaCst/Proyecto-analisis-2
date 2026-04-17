@@ -52,6 +52,7 @@ db.estadoEnvios = require("./estadoenvio.model.js")(sequelize, DataTypes);
 db.envios = require("./envio.model.js")(sequelize, DataTypes);
 db.wishlists = require("./Wishlist.model.js")(sequelize, DataTypes);
 db.wishlistDetalles = require("./wishlistdetalle.model.js")(sequelize, DataTypes);
+db.historiales = require("./historial.model.js")(sequelize, DataTypes);
 
 // ================= MODELOS Y RELACIONES =================
 
