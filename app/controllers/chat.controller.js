@@ -3,6 +3,7 @@ import { evaluarConIA } from '../services/openia.service.js';
 
 const { historiales, usuarios } = db;
 
+// Función para enviar mensajes
 export const handleChatRequest = async (req, res) => {
   try {
     const { mensaje, usuarioId } = req.body;
@@ -11,37 +12,30 @@ export const handleChatRequest = async (req, res) => {
       return res.status(400).json({ msg: "Falta mensaje o usuarioId 🐺🚫" });
     }
 
-    // 1. Validamos al usuario
     const usuarioEncontrado = await usuarios.findByPk(usuarioId);
     if (!usuarioEncontrado) {
       return res.status(404).json({ msg: "Usuario no encontrado." });
     }
 
-    // 2. Guardamos el mensaje del usuario
     await historiales.create({
       usuarioId: usuarioId,
       role: 'user',
       contenido: mensaje
     });
 
-    // 3. Obtenemos historial (Subimos el límite a 15 para no perder contexto)
     const historialPrevio = await historiales.findAll({
       where: { usuarioId: usuarioId },
       order: [['createdAt', 'DESC']],
       limit: 15
     });
 
-    // 4. Llamamos a Glitch
     const respuestaCompleta = await evaluarConIA(mensaje, historialPrevio.reverse());
 
-    // --- LOGICA DE FRAGMENTACIÓN ---
-    // Dividimos por el delimitador ||| que configuramos en el prompt
     const mensajesIndividuales = respuestaCompleta
       .split('|||')
       .map(msg => msg.trim())
       .filter(msg => msg.length > 0);
 
-    // 5. Guardamos CADA mensaje de Glitch como un registro nuevo
     for (const texto of mensajesIndividuales) {
       await historiales.create({
         usuarioId: usuarioId,
@@ -50,11 +44,29 @@ export const handleChatRequest = async (req, res) => {
       });
     }
 
-    // 6. Enviamos el array de respuestas al cliente
     res.json({ respuestas: mensajesIndividuales });
 
   } catch (error) {
     console.error("ERROR EN CHAT CONTROLLER:", error);
     res.status(500).json({ msg: "Lo siento, te perdí el rastro... 🐺😔" });
+  }
+};
+
+// Función para recuperar historial (LA QUE TE DA ERROR)
+export const obtenerHistorialPorUsuario = async (req, res) => {
+  try {
+    const { usuarioId } = req.params;
+
+    const historial = await historiales.findAll({
+      where: { usuarioId: usuarioId },
+      order: [['createdAt', 'ASC']], 
+      attributes: ['role', 'contenido', 'createdAt']
+    });
+
+    res.json({ mensajes: historial || [] });
+
+  } catch (error) {
+    console.error("❌ ERROR AL RECUPERAR HISTORIAL:", error);
+    res.status(500).json({ msg: "No pude olfatear tus mensajes antiguos... 🐺" });
   }
 };
