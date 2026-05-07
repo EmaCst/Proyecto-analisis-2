@@ -3,7 +3,6 @@ import { evaluarConIA } from '../services/openia.service.js';
 
 const { historiales, usuarios } = db;
 
-// Función para enviar mensajes
 export const handleChatRequest = async (req, res) => {
   try {
     const { mensaje, usuarioId } = req.body;
@@ -17,25 +16,30 @@ export const handleChatRequest = async (req, res) => {
       return res.status(404).json({ msg: "Usuario no encontrado." });
     }
 
+    // 1. Guardar mensaje del usuario
     await historiales.create({
       usuarioId: usuarioId,
       role: 'user',
       contenido: mensaje
     });
 
+    // 2. Obtener historial (Traemos los últimos 20 para tener buen contexto de stickers + texto)
     const historialPrevio = await historiales.findAll({
       where: { usuarioId: usuarioId },
       order: [['createdAt', 'DESC']],
-      limit: 15
+      limit: 20 
     });
 
+    // IMPORTANTE: reverse() para que la IA reciba: [viejo, ..., nuevo]
     const respuestaCompleta = await evaluarConIA(mensaje, historialPrevio.reverse());
 
+    // 3. Fragmentar respuesta (Sticker ||| Texto ||| Producto)
     const mensajesIndividuales = respuestaCompleta
       .split('|||')
       .map(msg => msg.trim())
       .filter(msg => msg.length > 0);
 
+    // 4. Guardar cada fragmento por separado
     for (const texto of mensajesIndividuales) {
       await historiales.create({
         usuarioId: usuarioId,
@@ -44,6 +48,7 @@ export const handleChatRequest = async (req, res) => {
       });
     }
 
+    // 5. Enviar al front
     res.json({ respuestas: mensajesIndividuales });
 
   } catch (error) {
@@ -52,7 +57,6 @@ export const handleChatRequest = async (req, res) => {
   }
 };
 
-// Función para recuperar historial (LA QUE TE DA ERROR)
 export const obtenerHistorialPorUsuario = async (req, res) => {
   try {
     const { usuarioId } = req.params;
