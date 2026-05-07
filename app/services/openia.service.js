@@ -11,24 +11,20 @@ export const evaluarConIA = async (mensajeUsuario, historial) => {
     const ruido = ["hola", "puedes", "mandar", "que", "zapatos", "tienes", "color", "ver", "quiero", "busca", "para", "unos", "talla", "tengas", "algun", "modelo"];
     const palabrasClave = mensajeLimpio.split(" ").filter(p => p.length >= 1 && !ruido.includes(p)); 
 
-    // 1. BUSCAR COLOR Y TALLA EN PARALELO
     let colorIdEncontrado = null;
     let tallaIdEncontrada = null;
 
     for (const palabra of palabrasClave) {
-      // ¿Es un color?
       if (!colorIdEncontrado) {
         const colorMatch = await colores.findOne({ where: { nombre: { [Op.iLike]: `%${palabra}%` } } });
         if (colorMatch) colorIdEncontrado = colorMatch.id;
       }
-      // ¿Es una talla? (Buscamos coincidencia exacta de número)
       if (!tallaIdEncontrada) {
         const tallaMatch = await tallas.findOne({ where: { numero: palabra } });
         if (tallaMatch) tallaIdEncontrada = tallaMatch.id;
       }
     }
 
-    // 2. BÚSQUEDA DINÁMICA DE PRODUCTOS
     const productosEncontrados = await productos.findAll({
       where: {
         [Op.or]: [
@@ -40,57 +36,60 @@ export const evaluarConIA = async (mensajeUsuario, historial) => {
       include: [
         { 
           model: inventarios, 
-          required: (colorIdEncontrado || tallaIdEncontrada) ? true : false, // Si pidió algo específico, forzamos el cruce
+          required: (colorIdEncontrado || tallaIdEncontrada) ? true : false,
           include: [{ model: colores }, { model: tallas }]
         }
       ],
       distinct: true
     });
 
-    // 3. CARGA DE STICKERS
     const listaDeStickers = await stickers.findAll();
-    const catalogoStickers = listaDeStickers.map(s => `- "${s.emocion}": ![Sticker](${s.url})`).join("\n");
+    const catalogoStickers = listaDeStickers.map(s => `- "${s.emocion}": ${s.url}`).join("\n");
 
-    // 4. CONSTRUIR CONTEXTO
     let contextoExtra = "";
     if (productosEncontrados.length > 0) {
       const datosParaIA = productosEncontrados.map(p => {
-        // Filtrar inventario si el usuario pidió una talla específica
         const invFiltrado = tallaIdEncontrada 
           ? p.inventarios.filter(i => i.tallaId === tallaIdEncontrada)
           : p.inventarios;
 
         const misColores = [...new Set(invFiltrado.map(i => i.colore?.nombre || i.color?.nombre))].filter(Boolean).join(", ");
-        const misTallas = [...new Set(invFiltrado.map(i => i.talla?.numero))].filter(Boolean).sort().join(", ");
-        
-        return {
-          id: p.id,
-          nombre: p.nombre,
-          precio: p.precio,
-          colores: misColores,
-          tallas: misTallas,
-          imagen: p.imagenUrl
-        };
-      }).filter(d => d.tallas !== ""); // Solo mostrar si hay stock de esa talla
+        const misTallas = [...new Set(invFiltrado.map(i => i.talla?.numero))].filter(Boolean).sort((a,b) => a-b).join(", ");
+        const linkDetalle = `https://zona404shoes.vercel.app/producto/${p.id}`;
 
-      contextoExtra = datosParaIA.length > 0 
-        ? `\n\n[INFO REAL DE DB NEON]: ${JSON.stringify(datosParaIA)}`
-        : `\n\n[INFO REAL DE DB NEON]: NO HAY STOCK en la talla solicitada.`;
+        // Enviamos explícitamente la URL de la imagen en el contexto
+        return `PRODUCTO: ${p.nombre} | PRECIO: $${p.precio} | COLORES: ${misColores} | TALLAS: ${misTallas} | LINK: ${linkDetalle} | FOTO: ${p.imagenUrl}`;
+      }).filter(d => !d.includes("TALLAS: "));
+
+      contextoExtra = `\n\n[INVENTARIO REAL DISPONIBLE]:\n${datosParaIA.join("\n")}`;
     } else {
-      contextoExtra = `\n\n[INFO REAL DE DB NEON]: NO HAY STOCK.`;
+      contextoExtra = `\n\n[SISTEMA]: No hay stock disponible.`;
     }
 
-    // 5. RESPUESTA OPENAI
     const messages = [
       { 
         role: "system", 
-        content: `Eres Glitch, el lobo alfa de "Zona 404 Shoes". 🐺
+        content: `Eres Glitch, el lobo alfa de "Zona 404 Shoes" 🐺.
+        
+        STICKERS DISPONIBLES:
         ${catalogoStickers}
-        REGLAS:
-        1. SEPARADOR: "|||".
-        2. VERDAD: Solo lo que está en [INFO REAL DE DB NEON].
-        3. ESTRUCTURA: Sticker ||| Texto ||| Producto.
-        4. Si el usuario pide una talla y NO hay en el JSON, di que no la tienes.`
+
+        REGLAS DE FORMATO:
+        1. SEPARADOR: Usa "|||" para dividir las 3 burbujas.
+        2. ESTRUCTURA:
+           Burbuja 1: Sticker ![Sticker](URL)
+           |||
+           Burbuja 2: Mensaje de texto cool.
+           |||
+           Burbuja 3: Lista detallada:
+           ![Zapato](URL_DE_FOTO)
+           **Nombre del Zapato**
+           💰 Precio: $XXX
+           🎨 Colores: ...
+           📏 Tallas: ...
+           🔗 [Ver más detalles](LINK)
+        
+        3. FOTOS: Es obligatorio poner la foto del zapato al principio de la descripción de cada producto.`
       },
       ...historial.map(msg => ({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.contenido })),
       { role: "user", content: mensajeUsuario + contextoExtra }
@@ -99,13 +98,13 @@ export const evaluarConIA = async (mensajeUsuario, historial) => {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: messages,
-      temperature: 0.2,
+      temperature: 0.1,
     });
 
     return response.choices[0].message.content;
 
   } catch (error) {
     console.error("❌ ERROR:", error.message);
-    return "![Sticker](https://github.com/Esteban-can/Sticker_Glitch/blob/main/Sticker_3.png?raw=true) ||| ¡Auuu! Hubo un error en la búsqueda. 🐺";
+    return "![Sticker](https://github.com/Esteban-can/Sticker_Glitch/blob/main/Sticker_3.png?raw=true) ||| ¡Auuu! Hubo un error en mi olfato. 🐺";
   }
 };
