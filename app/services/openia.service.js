@@ -7,19 +7,16 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export const evaluarConIA = async (mensajeUsuario, historial) => {
   try {
-    const mensajeLimpio = mensajeUsuario.toLowerCase().replace(/[?¿!¡.,]/g, "").trim();
-    
-    // 1. Detección de saludo
+    const mensajeLimpio = mensajeUsuario.toLowerCase().replace(/[?¿!¡.,=]/g, " ").trim();
     const esSaludo = ["hola", "buenos dias", "buenas tardes", "hey", "que tal", "saludos"].includes(mensajeLimpio);
 
-    const ruido = ["hola", "puedes", "mandar", "que", "zapatos", "tienes", "color", "ver", "quiero", "busca", "para", "unos", "talla", "tengas", "algun", "modelo"];
-    const palabrasClave = mensajeLimpio.split(" ").filter(p => p.length >= 1 && !ruido.includes(p)); 
+    const ruido = ["puedes", "mandar", "que", "zapatos", "tienes", "ver", "quiero", "busca", "para", "unos", "tengas", "algun", "modelo"];
+    const palabrasClave = mensajeLimpio.split(" ").filter(p => p.length >= 2 && !ruido.includes(p)); 
 
     let colorIdEncontrado = null;
     let tallaIdEncontrada = null;
     let productosEncontrados = [];
 
-    // 2. Búsqueda en Base de Datos (Mantenemos filtros de color y talla)
     if (!esSaludo || palabrasClave.length > 0) {
       for (const palabra of palabrasClave) {
         if (!colorIdEncontrado) {
@@ -35,7 +32,7 @@ export const evaluarConIA = async (mensajeUsuario, historial) => {
       productosEncontrados = await productos.findAll({
         where: {
           [Op.or]: [
-            ...(palabrasClave.length > 0 ? palabrasClave.map(p => ({ nombre: { [Op.iLike]: `%${p}%` } })) : []),
+            ...(palabrasClave.map(p => ({ nombre: { [Op.iLike]: `%${p}%` } }))),
             colorIdEncontrado ? { '$inventarios.colorId$': colorIdEncontrado } : null,
             tallaIdEncontrada ? { '$inventarios.tallaId$': tallaIdEncontrada } : null
           ].filter(Boolean)
@@ -54,10 +51,8 @@ export const evaluarConIA = async (mensajeUsuario, historial) => {
 
     let contextoExtra = "";
 
-    // 3. Reconstrucción del contexto filtrando por lo que el usuario pidió
     if (productosEncontrados.length > 0) {
       const datosParaIA = productosEncontrados.map(p => {
-        // 🔥 FILTRO CRÍTICO: Si el usuario pidió un color o talla, solo mostramos eso en el mensaje
         let invFiltrado = p.inventarios;
         if (colorIdEncontrado) invFiltrado = invFiltrado.filter(i => i.colorId === colorIdEncontrado);
         if (tallaIdEncontrada) invFiltrado = invFiltrado.filter(i => i.tallaId === tallaIdEncontrada);
@@ -66,33 +61,30 @@ export const evaluarConIA = async (mensajeUsuario, historial) => {
         const misTallas = [...new Set(invFiltrado.map(i => i.talla?.numero))].filter(Boolean).sort((a,b) => a-b).join(", ");
         const linkDetalle = `https://zona404shoes.vercel.app/producto/${p.id}`;
         
-        return `PRODUCTO: ${p.nombre} | PRECIO: Q.${p.precio} | COLORES: ${misColores} | TALLAS: ${misTallas} | LINK: ${linkDetalle} | FOTO: ${p.imagenUrl}`;
-      }).filter(d => !d.includes("COLORES:  | TALLAS: ")); // Filtra si quedó vacío por el cruce
+        // 🔥 CAMBIO CLAVE: Entregamos el bloque ya formateado para que la IA solo lo copie
+        return `[![${p.nombre}](${p.imagenUrl})](${linkDetalle}) \n**${p.nombre}**\nPrecio: Q.${p.precio}\nColores: ${misColores}\nTallas: ${misTallas}`;
+      }).filter(d => d.includes("Precio: Q."));
 
-      contextoExtra = `\n\n[INVENTARIO REAL DISPONIBLE]:\n${datosParaIA.join("\n")}`;
+      contextoExtra = `\n\n[INVENTARIO ENCONTRADO - COPIA ESTE FORMATO EXACTO]:\n${datosParaIA.join("\n\n")}`;
     } else if (esSaludo && palabrasClave.length === 0) {
-      contextoExtra = `\n\n[SISTEMA]: El usuario está saludando. Responde amablemente y ofrece ayuda.`;
+      contextoExtra = `\n\n[SISTEMA]: El usuario saludó. Responde amable y ofrece ayuda.`;
     } else {
-      contextoExtra = `\n\n[SISTEMA]: No hay stock para los filtros aplicados. Sugiere otros colores o tallas.`;
+      contextoExtra = `\n\n[SISTEMA]: No hay stock. NO inventes productos.`;
     }
 
     const messages = [
       { 
         role: "system", 
-        content: `Eres Glitch, el asistente de "Zona 404 Shoes" 🐺.
+        content: `Eres Glitch, asistente de "Zona 404 Shoes" 🐺.
         
-        STICKERS DISPONIBLES:
+        STICKERS:
         ${catalogoStickers}
 
-        REGLAS DE FORMATO (Obligatorio 3 burbujas separadas por |||):
-        Burbuja 1: Sticker ![Sticker](URL)
-        |||
-        Burbuja 2: Mensaje de texto amigable.
-        |||
-        Burbuja 3: Lista de productos con su foto arriba. 
-        Si el usuario pidió un color o talla específica, solo muestra la información que coincida con lo que el sistema te pasó en el inventario.
-
-        IMPORTANTE: No uses listas con guiones. Pon la foto siempre antes del nombre del zapato.`
+        REGLAS DE ORO (PROHIBIDO FALLAR):
+        1. Responde SIEMPRE en 3 burbujas separadas por "|||".
+        2. BURBUJA 3: Usa ÚNICAMENTE el formato de inventario que te pasé.
+        3. ❌ PROHIBIDO: No añadidas enlaces de texto como "[Ver más]" o "[Ver detalles]" al final. El link ya está dentro de la imagen.
+        4. Si no hay productos, la burbuja 3 debe ofrecer ayuda o sugerir otra búsqueda.`
       },
       ...historial.map(msg => ({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.contenido })),
       { role: "user", content: mensajeUsuario + contextoExtra }
@@ -101,13 +93,13 @@ export const evaluarConIA = async (mensajeUsuario, historial) => {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: messages,
-      temperature: 0.5,
+      temperature: 0.2, // Bajamos a 0.2 para que sea más obediente con el formato
     });
 
     return response.choices[0].message.content;
 
   } catch (error) {
     console.error("❌ ERROR:", error.message);
-    return "![Sticker](https://github.com/Esteban-can/Sticker_Glitch/blob/main/Sticker_3.png?raw=true) ||| Hubo un error en mi sistema. 🐺";
+    return "![Sticker](https://github.com/Esteban-can/Sticker_Glitch/blob/main/Sticker_3.png?raw=true) ||| Hubo un error en mi olfato. 🐺";
   }
 };
