@@ -192,116 +192,71 @@ export const evaluarConIA = async (
     // KEYWORDS
     // ==========================================
 
-    const palabrasClave =
-      mensajeLimpio
-        .split(" ")
-        .filter(
-          palabra =>
-            palabra.length >= 2 &&
-            !ruido.includes(palabra)
-        );
+// ==========================================
+    // DEBUG: Ver qué llega exactamente
+    console.log("📥 MENSAJE ORIGINAL:", mensajeLimpio);
+
+    const palabrasClave = mensajeLimpio
+      .split(/\s+/)
+      .filter(palabra => palabra.length > 0); // Primero agarramos TODO
+
+    console.log("🔍 TODAS LAS PALABRAS:", palabrasClave);
 
     // ==========================================
     // IDS ENCONTRADOS
-    // ==========================================
-
     let colorIdEncontrado = null;
     let tallaIdEncontrada = null;
-
-    // ==========================================
-    // PALABRAS PARA PRODUCTOS
-    // ==========================================
-
     const palabrasBusquedaProducto = [];
 
     // ==========================================
-    // BUSCAR COLOR Y TALLA
-    // ==========================================
-
+    // PROCESAR
     for (const palabraOriginal of palabrasClave) {
+      // Ignorar palabras de ruido manualmente aquí para ver qué pasa
+      if (ruido.includes(palabraOriginal.toLowerCase()) && palabraOriginal.length > 3) {
+          continue; 
+      }
 
-      // ==========================================
-      // NORMALIZAR
-      // ==========================================
-
-      const palabra =
-        palabraOriginal.endsWith("es")
-          ? palabraOriginal.slice(0, -2)
-          : palabraOriginal.endsWith("s")
-            ? palabraOriginal.slice(0, -1)
-            : palabraOriginal;
-
+      const esNumero = !isNaN(palabraOriginal);
       let encontrada = false;
 
-      // ==========================================
-      // BUSCAR COLOR
-      // ==========================================
-
-      if (!colorIdEncontrado && palabra.length >= 4) {
-
-    const colorMatch =
-      await colores.findOne({
-
-        where: {
-          nombre: {
-            [Op.iLike]: `%${palabra}%`
-          }
-        }
-
-      });
-
-    if (colorMatch) {
-
-      colorIdEncontrado =
-        colorMatch.id;
-
-      encontrada = true;
-
-      console.log(
-        "🎨 COLOR:",
-        colorMatch.nombre
-      );
-    }
-}
-      // ==========================================
-      // BUSCAR TALLA
-      // ==========================================
-
-      if (!tallaIdEncontrada) {
-
-        const tallaMatch =
-          await tallas.findOne({
-
-            where: {
-              numero: palabra
-            }
-          });
-
+      // 1. BUSCAR TALLA (Si es número o tiene 2-3 dígitos)
+      if (!tallaIdEncontrada && (esNumero || palabraOriginal.length <= 3)) {
+        const tallaMatch = await tallas.findOne({
+          where: { numero: palabraOriginal }
+        });
         if (tallaMatch) {
-
-          tallaIdEncontrada =
-            tallaMatch.id;
-
+          tallaIdEncontrada = tallaMatch.id;
           encontrada = true;
-
-          console.log(
-            "📏 TALLA:",
-            tallaMatch.numero
-          );
+          console.log("📏 TALLA DETECTADA:", tallaMatch.numero);
         }
       }
 
-      // ==========================================
-      // SI NO ERA COLOR NI TALLA
-      // ==========================================
+      // 2. BUSCAR COLOR
+      if (!encontrada && !colorIdEncontrado && !esNumero) {
+        // Limpieza básica solo para colores
+        let pColor = palabraOriginal.toLowerCase();
+        if (pColor.length > 4) {
+            if (pColor.endsWith("es")) pColor = pColor.slice(0, -2);
+            else if (pColor.endsWith("s")) pColor = pColor.slice(0, -1);
+        }
 
-      if (!encontrada) {
+        const colorMatch = await colores.findOne({
+          where: { nombre: { [Op.iLike]: `%${pColor}%` } }
+        });
+        if (colorMatch) {
+          colorIdEncontrado = colorMatch.id;
+          encontrada = true;
+          console.log("🎨 COLOR DETECTADO:", colorMatch.nombre);
+        }
+      }
 
-        palabrasBusquedaProducto.push(
-          palabra
-        );
+      // 3. SI NO ES NADA, VA A PRODUCTO
+      if (!encontrada && !ruido.includes(palabraOriginal.toLowerCase())) {
+        palabrasBusquedaProducto.push(palabraOriginal);
       }
     }
+
+    console.log("✅ RESULTADO FILTROS -> Keywords:", palabrasBusquedaProducto, "Color:", colorIdEncontrado, "Talla:", tallaIdEncontrada);
 
     // ==========================================
     // DEBUG
