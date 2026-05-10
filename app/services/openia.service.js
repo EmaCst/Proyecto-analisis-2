@@ -1,102 +1,808 @@
+// ==========================================
+// openia.service.js
+// ==========================================
+
 import OpenAI from "openai";
-import db from '../models/index.js';
 import { Op } from "sequelize";
 
-const { stickers, productos, colores, tallas, inventarios } = db;
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// ==========================================
+// IMPORT MODELS
+// ==========================================
 
-export const evaluarConIA = async (mensajeUsuario, historial) => {
+import pkg from "../models/index.js";
+
+const db = pkg.default || pkg;
+
+const {
+  productos,
+  inventarios,
+  colores,
+  tallas,
+  stickers
+} = db;
+
+// ==========================================
+// OPENAI
+// ==========================================
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// ==========================================
+// FUNCIÓN PRINCIPAL
+// ==========================================
+
+export const evaluarConIA = async (
+  mensajeUsuario,
+  historial
+) => {
+
   try {
-    const mensajeLimpio = mensajeUsuario.toLowerCase().replace(/[?¿!¡.,=]/g, " ").trim();
-    const esSaludo = ["hola", "buenos dias", "buenas tardes", "hey", "que tal", "saludos"].includes(mensajeLimpio);
 
-    const ruido = ["puedes", "mandar", "que", "zapatos", "tienes", "ver", "quiero", "busca", "para", "unos", "tengas", "algun", "modelo", "marca", "de", "la", "en", "con", "por", "del", "par"];
-    const palabrasClave = mensajeLimpio.split(" ").filter(p => p.length >= 3 && !ruido.includes(p)); 
+    // ==========================================
+    // LIMPIAR MENSAJE
+    // ==========================================
+
+    const mensajeLimpio =
+      mensajeUsuario
+        .toLowerCase()
+        .replace(/[?¿!¡.,]/g, "")
+        .trim();
+
+    // ==========================================
+    // CONVERSACIONES CASUALES
+    // ==========================================
+
+    const conversacionesCasuales = [
+      "hola",
+      "holi",
+      "holaa",
+      "buenos dias",
+      "buen dia",
+      "buenas tardes",
+      "buenas noches",
+      "hey",
+      "ey",
+      "que tal",
+      "q tal",
+      "saludos",
+      "como estas",
+      "como andas",
+      "como te va",
+      "todo bien",
+      "todo good",
+      "que haces",
+      "que onda",
+      "gracias",
+      "muchas gracias",
+      "thanks",
+      "ok",
+      "oka",
+      "vale",
+      "perfecto",
+      "dale",
+      "esta bien",
+      "listo",
+        "algo",
+  "alguna",
+  "alguno",
+  "algunos",
+  "algunas",
+  "quiero",
+  "busco",
+  "buscar",
+  "marca",
+  "producto",
+  "productos",
+  "zapato",
+  "zapatos",
+  "tenis",
+  "ropa",
+  "camisa",
+  "camiseta",
+  "unos",
+  "unas",
+  "un",
+  "una",
+  "de",
+  "del",
+  "la",
+  "el",
+  "los",
+  "las",
+  "en"
+    ];
+
+    const esConversacionCasual =
+      conversacionesCasuales.some(frase =>
+        mensajeLimpio.includes(frase)
+      );
+
+      
+
+    // ==========================================
+    // PALABRAS BASURA
+    // ==========================================
+
+    const ruido = [
+      "hola",
+      "par",
+      "pares",
+      "puedes",
+      "mandar",
+      "que",
+      "zapatos",
+      "tenis",
+      "tienes",
+      "color",
+      "colores",
+      "ver",
+      "quiero",
+      "busca",
+      "para",
+      "unos",
+      "unas",
+      "talla",
+      "tengas",
+      "algun",
+      "modelo",
+      "de",
+      "los",
+      "las",
+      "un",
+      "una",
+      "me",
+      "muestras",
+      "mostrar",
+      "ensena",
+      "hay",
+      "con",
+        "algo",
+  "alguna",
+  "alguno",
+  "algunos",
+  "algunas",
+  "quiero",
+  "busco",
+  "buscar",
+  "marca",
+  "producto",
+  "productos",
+  "zapato",
+  "zapatos",
+  "tenis",
+  "ropa",
+  "camisa",
+  "camiseta",
+  "unos",
+  "unas",
+  "un",
+  "una",
+  "de",
+  "del",
+  "la",
+  "el",
+  "los",
+  "las",
+  "en"
+    ];
+
+    // ==========================================
+    // KEYWORDS
+    // ==========================================
+
+    const palabrasClave =
+      mensajeLimpio
+        .split(" ")
+        .filter(
+          palabra =>
+            palabra.length >= 2 &&
+            !ruido.includes(palabra)
+        );
+
+    // ==========================================
+    // IDS ENCONTRADOS
+    // ==========================================
 
     let colorIdEncontrado = null;
     let tallaIdEncontrada = null;
 
-    // 1. Identificación de filtros técnicos
-    for (const palabra of palabrasClave) {
-      const colorMatch = await colores.findOne({ where: { nombre: { [Op.iLike]: palabra } } });
-      if (colorMatch) colorIdEncontrado = colorMatch.id;
-      
-      const tallaMatch = await tallas.findOne({ where: { numero: palabra } });
-      if (tallaMatch) tallaIdEncontrada = tallaMatch.id;
+    // ==========================================
+    // PALABRAS PARA PRODUCTOS
+    // ==========================================
+
+    const palabrasBusquedaProducto = [];
+
+    // ==========================================
+    // BUSCAR COLOR Y TALLA
+    // ==========================================
+
+    for (const palabraOriginal of palabrasClave) {
+
+      // ==========================================
+      // NORMALIZAR
+      // ==========================================
+
+      const palabra =
+        palabraOriginal.endsWith("es")
+          ? palabraOriginal.slice(0, -2)
+          : palabraOriginal.endsWith("s")
+            ? palabraOriginal.slice(0, -1)
+            : palabraOriginal;
+
+      let encontrada = false;
+
+      // ==========================================
+      // BUSCAR COLOR
+      // ==========================================
+
+      if (!colorIdEncontrado && palabra.length >= 4) {
+
+    const colorMatch =
+      await colores.findOne({
+
+        where: {
+          nombre: {
+            [Op.iLike]: `%${palabra}%`
+          }
+        }
+
+      });
+
+    if (colorMatch) {
+
+      colorIdEncontrado =
+        colorMatch.id;
+
+      encontrada = true;
+
+      console.log(
+        "🎨 COLOR:",
+        colorMatch.nombre
+      );
+    }
+}
+      // ==========================================
+      // BUSCAR TALLA
+      // ==========================================
+
+      if (!tallaIdEncontrada) {
+
+        const tallaMatch =
+          await tallas.findOne({
+
+            where: {
+              numero: palabra
+            }
+          });
+
+        if (tallaMatch) {
+
+          tallaIdEncontrada =
+            tallaMatch.id;
+
+          encontrada = true;
+
+          console.log(
+            "📏 TALLA:",
+            tallaMatch.numero
+          );
+        }
+      }
+
+      // ==========================================
+      // SI NO ERA COLOR NI TALLA
+      // ==========================================
+
+      if (!encontrada) {
+
+        palabrasBusquedaProducto.push(
+          palabra
+        );
+      }
     }
 
-    let productosEncontrados = [];
-    if (!esSaludo || palabrasClave.length > 0) {
-      const condicionesAnd = [];
-      
-      // 🔥 LA SOLUCIÓN: Buscar en NOMBRE o en MARCA
-      if (palabrasClave.length > 0) {
-        condicionesAnd.push({
-          [Op.or]: palabrasClave.flatMap(p => [
-            { nombre: { [Op.iLike]: `%${p}%` } },
-            { marca: { [Op.iLike]: `%${p}%` } } // Ahora busca Roy aquí también
-          ])
-        });
-      }
+    // ==========================================
+    // DEBUG
+    // ==========================================
 
-      // Filtros de inventario
-      if (colorIdEncontrado) {
-        condicionesAnd.push({
-          id: { [Op.in]: db.sequelize.literal(`(SELECT "productoId" FROM "inventarios" WHERE "colorId" = ${colorIdEncontrado})`) }
-        });
-      }
-      if (tallaIdEncontrada) {
-        condicionesAnd.push({
-          id: { [Op.in]: db.sequelize.literal(`(SELECT "productoId" FROM "inventarios" WHERE "tallaId" = ${tallaIdEncontrada})`) }
-        });
-      }
+    console.log(
+      "📝 Keywords Producto:",
+      palabrasBusquedaProducto
+    );
 
-      productosEncontrados = await productos.findAll({
-        where: { [Op.and]: condicionesAnd },
-        include: [{ 
-          model: inventarios, 
-          include: [{ model: colores }, { model: tallas }]
-        }],
-        distinct: true
+    console.log(
+      "🎨 Color ID:",
+      colorIdEncontrado
+    );
+
+    console.log(
+      "📏 Talla ID:",
+      tallaIdEncontrada
+    );
+
+    // ==========================================
+    // CONDICIONES
+    // ==========================================
+
+    const condiciones = [];
+
+    // ==========================================
+    // BÚSQUEDA FLEXIBLE PRODUCTOS
+    // ==========================================
+
+if (palabrasBusquedaProducto.length > 0) {
+
+  condiciones.push({
+
+    [Op.or]:
+
+      palabrasBusquedaProducto.flatMap(
+        palabra => ([
+          {
+            nombre: {
+              [Op.iLike]: `%${palabra}%`
+            }
+          },
+          {
+            marca: {
+              [Op.iLike]: `%${palabra}%`
+            }
+          },
+          {
+            modelo: {
+              [Op.iLike]: `%${palabra}%`
+            }
+          }
+        ])
+      )
+  });
+}
+
+    // ==========================================
+    // FILTRO COLOR
+    // ==========================================
+
+    if (colorIdEncontrado) {
+
+      condiciones.push({
+
+        "$inventarios.colorId$":
+          colorIdEncontrado
       });
     }
 
-    // --- Lógica de Stickers ---
-    const listaDeStickers = await stickers.findAll();
-    const catalogoStickers = listaDeStickers.map(s => `- "${s.emocion}": ${s.url}`).join("\n");
+    // ==========================================
+    // FILTRO TALLA
+    // ==========================================
 
-    let contextoExtra = "";
-    if (productosEncontrados.length > 0) {
-      const datosParaIA = productosEncontrados.map(p => {
-        let invFiltrado = p.inventarios;
-        if (colorIdEncontrado) invFiltrado = invFiltrado.filter(i => i.colorId === colorIdEncontrado);
-        if (tallaIdEncontrada) invFiltrado = invFiltrado.filter(i => i.tallaId === tallaIdEncontrada);
+    if (tallaIdEncontrada) {
 
-        const misColores = [...new Set(invFiltrado.map(i => i.colore?.nombre || i.color?.nombre))].filter(Boolean).join(", ");
-        const misTallas = [...new Set(invFiltrado.map(i => i.talla?.numero))].filter(Boolean).sort((a,b) => a-b).join(", ");
-        const linkDetalle = `https://zona404shoes.vercel.app/producto/${p.id}`;
-        
-        return `[BLOQUE] [![${p.nombre}](${p.imagenUrl})](${linkDetalle}) \n**${p.nombre}** (${p.marca})\nPrecio: Q.${p.precio}\nColores: ${misColores}\nTallas: ${misTallas} [/BLOQUE]`;
-      }).filter(d => d.includes("Precio:"));
+      condiciones.push({
 
-      contextoExtra = `\n\n[INVENTARIO REAL]:\n${datosParaIA.join("\n\n")}`;
-    } else {
-      contextoExtra = `\n\n[SISTEMA]: No hay stock para "${mensajeUsuario}".`;
+        "$inventarios.tallaId$":
+          tallaIdEncontrada
+      });
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "Eres Glitch 🐺. Responde en 3 burbujas (|||). En la 3ra, COPIA el contenido de los [BLOQUE] tal cual, sin agregar links de texto extra." },
-        ...historial.map(msg => ({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.contenido })),
-        { role: "user", content: mensajeUsuario + contextoExtra }
-      ],
-      temperature: 0,
-    });
+    // ==========================================
+    // BUSCAR PRODUCTOS
+    // ==========================================
 
-    return response.choices[0].message.content.replace(/\[\/?BLOQUE\]/g, "").trim();
+    let productosEncontrados = [];
+
+    if (
+      !esConversacionCasual ||
+      palabrasClave.length > 0
+    ) {
+
+      productosEncontrados =
+        await productos.findAll({
+
+          where:
+
+            condiciones.length > 0
+
+              ? {
+                  [Op.and]:
+                    condiciones
+                }
+
+              : {},
+
+          include: [
+
+            {
+              model: inventarios,
+
+              required:
+                !!(
+                  colorIdEncontrado ||
+                  tallaIdEncontrada
+                ),
+
+              include: [
+
+                {
+                  model: colores,
+                  as: "color"
+                },
+
+                {
+                  model: tallas,
+                  as: "talla"
+                }
+              ]
+            }
+          ],
+
+          distinct: true
+        });
+    }
+
+    // ==========================================
+    // DEBUG
+    // ==========================================
+
+    console.log(
+      "👟 PRODUCTOS:",
+      productosEncontrados.length
+    );
+
+    // ==========================================
+    // STICKERS
+    // ==========================================
+
+    const listaDeStickers =
+      await stickers.findAll();
+
+    const catalogoStickers =
+      listaDeStickers
+        .map(
+          sticker =>
+
+            `- "${sticker.emocion}": ${sticker.url}`
+        )
+        .join("\n");
+
+    // ==========================================
+    // CONTEXTO
+    // ==========================================
+
+    let contextoExtra = "";
+
+    // ==========================================
+    // PRODUCTOS ENCONTRADOS
+    // ==========================================
+
+    if (
+      productosEncontrados.length > 0
+    ) {
+
+      const datosParaIA =
+        productosEncontrados
+
+          .map(producto => {
+
+            let inventarioFiltrado =
+              producto.inventarios || [];
+
+            // ==========================================
+            // FILTRAR COLOR
+            // ==========================================
+
+            if (colorIdEncontrado) {
+
+              inventarioFiltrado =
+                inventarioFiltrado.filter(
+
+                  inventario =>
+
+                    inventario.colorId ===
+                    colorIdEncontrado
+                );
+            }
+
+            // ==========================================
+            // FILTRAR TALLA
+            // ==========================================
+
+            if (tallaIdEncontrada) {
+
+              inventarioFiltrado =
+                inventarioFiltrado.filter(
+
+                  inventario =>
+
+                    inventario.tallaId ===
+                    tallaIdEncontrada
+                );
+            }
+
+            // ==========================================
+            // SI NO HAY INVENTARIO
+            // ==========================================
+
+            if (
+              inventarioFiltrado.length === 0 &&
+              (
+                colorIdEncontrado ||
+                tallaIdEncontrada
+              )
+            ) {
+
+              return null;
+            }
+
+            // ==========================================
+            // COLORES
+            // ==========================================
+
+            const coloresDisponibles =
+
+              [
+                ...new Set(
+
+                  inventarioFiltrado.map(
+
+                    inventario =>
+
+                      inventario.color?.nombre
+                  )
+                )
+              ]
+
+                .filter(Boolean)
+
+                .join(", ");
+
+            // ==========================================
+            // TALLAS
+            // ==========================================
+
+            const tallasDisponibles =
+
+              [
+                ...new Set(
+
+                  inventarioFiltrado.map(
+
+                    inventario =>
+
+                      inventario.talla?.numero
+                  )
+                )
+              ]
+
+                .filter(Boolean)
+
+                .sort(
+                  (a, b) => a - b
+                )
+
+                .join(", ");
+
+            const linkDetalle =
+              `https://zona404shoes.vercel.app/producto/${producto.id}`;
+
+            return `
+
+PRODUCTO: ${producto.nombre}
+
+PRECIO: Q.${producto.precio}
+
+COLORES: ${coloresDisponibles || "No especificados"}
+
+TALLAS: ${tallasDisponibles || "No especificadas"}
+
+LINK: ${linkDetalle}
+
+FOTO: ${producto.imagenUrl}
+
+`;
+          })
+
+          .filter(Boolean);
+
+      // ==========================================
+      // RESPUESTA INVENTARIO
+      // ==========================================
+
+      if (datosParaIA.length > 0) {
+
+        contextoExtra = `
+
+[INVENTARIO REAL DISPONIBLE]:
+
+${datosParaIA.join("\n")}
+
+`;
+
+      } else {
+
+        contextoExtra = `
+
+[SISTEMA]:
+
+No hay stock exacto para esos filtros.
+
+Sugiere alternativas similares.
+
+`;
+      }
+
+    }
+
+    // ==========================================
+    // CONVERSACIÓN CASUAL
+    // ==========================================
+
+    else if (
+      esConversacionCasual &&
+      palabrasClave.length === 0
+    ) {
+
+      contextoExtra = `
+
+[SISTEMA]:
+
+El usuario está teniendo una conversación casual.
+
+NO recomiendes productos.
+NO hables de inventario.
+NO sugieras zapatos.
+
+Responde únicamente de forma amigable.
+
+`;
+
+    }
+
+    // ==========================================
+    // SIN PRODUCTOS
+    // ==========================================
+
+    else {
+
+      contextoExtra = `
+
+[SISTEMA]:
+
+No se encontraron productos.
+
+Sugiere productos similares.
+
+`;
+    }
+
+    // ==========================================
+    // MENSAJES IA
+    // ==========================================
+
+    const messages = [
+
+      {
+        role: "system",
+
+        content: `
+
+Eres Glitch, el asistente de "Zona 404 Shoes" 🐺.
+
+STICKERS DISPONIBLES:
+
+${catalogoStickers}
+
+REGLAS:
+
+1. EXACTAMENTE 3 burbujas separadas por |||
+
+2. FORMATO:
+
+Burbuja 1:
+Sticker
+
+![Sticker](URL)
+
+|||
+
+Burbuja 2:
+Mensaje cool.
+
+|||
+
+Burbuja 3:
+Productos.
+
+FORMATO PRODUCTO:
+
+![Zapato](URL)
+
+**Nombre**
+
+💰 Precio
+
+🎨 Colores
+
+📏 Tallas
+
+🔗 Link
+
+IMPORTANTE:
+
+- Foto primero
+- NO usar listas con guiones
+- SOLO mostrar datos enviados
+- Si no hay stock sugerir alternativas
+- Si es conversación casual:
+  NO mostrar productos
+  NO recomendar zapatos
+`
+      },
+
+      ...historial.map(msg => ({
+
+        role:
+
+          msg.role === "assistant"
+            ? "assistant"
+            : "user",
+
+        content:
+          msg.contenido
+      })),
+
+      {
+        role: "user",
+
+        content:
+          mensajeUsuario +
+          contextoExtra
+      }
+    ];
+
+    // ==========================================
+    // OPENAI
+    // ==========================================
+
+    const response =
+      await openai.chat.completions.create({
+
+        model: "gpt-4o-mini",
+
+        messages,
+
+        temperature: 0.5
+      });
+
+    // ==========================================
+    // RETORNO
+    // ==========================================
+
+    return response
+      .choices[0]
+      .message
+      .content;
 
   } catch (error) {
-    return "![Sticker](...) ||| Error en la búsqueda. 🐺";
+
+    console.error(
+      "❌ ERROR:",
+      error
+    );
+
+    return `
+
+![Sticker](https://github.com/Esteban-can/Sticker_Glitch/blob/main/Sticker_3.png?raw=true)
+
+|||
+
+Hubo un error en mi sistema 🐺
+
+|||
+
+Intenta nuevamente.
+
+`;
   }
 };
