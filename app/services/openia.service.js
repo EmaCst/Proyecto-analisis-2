@@ -185,7 +185,10 @@ export const evaluarConIA = async (
   "el",
   "los",
   "las",
-  "en"
+  "en",
+  "dar", 
+  "pueda", 
+  "info"
     ];
 
     // ==========================================
@@ -199,6 +202,9 @@ export const evaluarConIA = async (
     const palabrasClave = mensajeLimpio
       .split(/\s+/)
       .filter(palabra => palabra.length > 0); // Primero agarramos TODO
+
+      const conectores = ["de", "del", "la", "el", "los", "las", "en", "un", "una", "y"];
+      const palabrasFiltradas = palabrasClave.filter(p => !conectores.includes(p.toLowerCase()));
 
     console.log("🔍 TODAS LAS PALABRAS:", palabrasClave);
 
@@ -231,29 +237,39 @@ export const evaluarConIA = async (
         }
       }
 
-      // 2. BUSCAR COLOR
-      if (!encontrada && !colorIdEncontrado && !esNumero) {
-        // Limpieza básica solo para colores
-        let pColor = palabraOriginal.toLowerCase();
-        if (pColor.length > 4) {
-            if (pColor.endsWith("es")) pColor = pColor.slice(0, -2);
-            else if (pColor.endsWith("s")) pColor = pColor.slice(0, -1);
-        }
+// 1. FILTRO DE RUIDO (Agregamos esto para que "pueda", "ver", etc., no lleguen abajo)
+    const pBaja = palabraOriginal.toLowerCase();
+    const excluir = ["que", "pueda", "ver", "tienes", "info", "dar"]; 
 
-        const colorMatch = await colores.findOne({
-          where: { nombre: { [Op.iLike]: `%${pColor}%` } }
-        });
-        if (colorMatch) {
-          colorIdEncontrado = colorMatch.id;
-          encontrada = true;
-          console.log("🎨 COLOR DETECTADO:", colorMatch.nombre);
-        }
+    if (ruido.includes(pBaja) || excluir.includes(pBaja) || pBaja.length <= 2) {
+      console.log(`🚫 RUIDO DETECTADO: ${pBaja}`);
+      encontrada = true; // <--- Bloqueamos la palabra para que no pase a Color ni a Producto
+    }
+
+    // 2. BUSCAR COLOR (Tu lógica original intacta)
+    if (!encontrada && !colorIdEncontrado && !esNumero) {
+      let pColor = palabraOriginal.toLowerCase();
+      if (pColor.length > 4) {
+        if (pColor.endsWith("es")) pColor = pColor.slice(0, -2);
+        else if (pColor.endsWith("s")) pColor = pColor.slice(0, -1);
       }
 
-      // 3. SI NO ES NADA, VA A PRODUCTO
-      if (!encontrada && !ruido.includes(palabraOriginal.toLowerCase())) {
-        palabrasBusquedaProducto.push(palabraOriginal);
+      const colorMatch = await colores.findOne({
+        where: { nombre: { [Op.iLike]: `%${pColor}%` } }
+      });
+
+      if (colorMatch) {
+        colorIdEncontrado = colorMatch.id;
+        encontrada = true;
+        console.log("🎨 COLOR DETECTADO:", colorMatch.nombre);
       }
+    }
+
+    // 3. SI NO ES NADA, VA A PRODUCTO
+    // (Ahora "pueda" no entrará aquí porque arriba pusimos encontrada = true)
+    if (!encontrada) {
+      palabrasBusquedaProducto.push(palabraOriginal);
+    }
     }
 
     console.log("✅ RESULTADO FILTROS -> Keywords:", palabrasBusquedaProducto, "Color:", colorIdEncontrado, "Talla:", tallaIdEncontrada);
@@ -288,30 +304,22 @@ export const evaluarConIA = async (
     // ==========================================
 
 if (palabrasBusquedaProducto.length > 0) {
+  // Unimos las palabras que quedaron para buscar la frase completa
+  const fraseBusqueda = palabrasBusquedaProducto.join(" ");
 
   condiciones.push({
-
-    [Op.or]:
-
-      palabrasBusquedaProducto.flatMap(
-        palabra => ([
-          {
-            nombre: {
-              [Op.iLike]: `%${palabra}%`
-            }
-          },
-          {
-            marca: {
-              [Op.iLike]: `%${palabra}%`
-            }
-          },
-          {
-            modelo: {
-              [Op.iLike]: `%${palabra}%`
-            }
-          }
-        ])
-      )
+    [Op.or]: [
+      { nombre: { [Op.iLike]: `%${fraseBusqueda}%` } },
+      { modelo: { [Op.iLike]: `%${fraseBusqueda}%` } },
+      { marca: { [Op.iLike]: `%${fraseBusqueda}%` } },
+      // Por si acaso el usuario puso las palabras en otro orden,
+      // mantenemos el filtro individual pero como un AND (más estricto)
+      {
+        [Op.and]: palabrasBusquedaProducto.map(p => ({
+          nombre: { [Op.iLike]: `%${p}%` }
+        }))
+      }
+    ]
   });
 }
 
